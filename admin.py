@@ -1,8 +1,9 @@
-from flask import Flask, render_template_string, g
+# admin.py
+from flask import Blueprint, render_template_string, g
 import sqlite3
 import os
 
-app = Flask(__name__)
+admin_bp = Blueprint("admin", __name__)
 DATABASE = os.path.join(os.path.dirname(__file__), 'orders.db')
 
 # HTML template
@@ -57,18 +58,15 @@ def get_db():
         db.row_factory = sqlite3.Row
     return db
 
-@app.teardown_appcontext
+@admin_bp.teardown_app_request
 def close_connection(exception):
     db = getattr(g, '_database', None)
     if db is not None:
         db.close()
 
-@app.route("/admin")
+@admin_bp.route("/admin")
 def dashboard():
     cur = get_db().cursor()
     cur.execute("SELECT * FROM orders ORDER BY timestamp DESC")
     orders = cur.fetchall()
     return render_template_string(TEMPLATE, orders=orders)
-
-if __name__ == "__main__":
-    app.run(port=5050, debug=True)
