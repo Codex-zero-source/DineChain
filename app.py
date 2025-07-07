@@ -9,6 +9,8 @@ from paystack import create_paystack_link
 from set_webhook import set_webhook
 from admin import admin_bp
 from openai import OpenAI
+import sqlite3
+from flask import g
 
 load_dotenv()
 app = Flask(__name__)
@@ -36,8 +38,37 @@ PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
 
 client = OpenAI(api_key=LLM_API_KEY, base_url=os.getenv("BASE_URL"))
 
+DATABASE = "orders.db"
+
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DATABASE)
+    return db
+
+def init_db():
+    with app.app_context():
+        db = get_db()
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id TEXT,
+                order_summary TEXT,
+                delivery TEXT,
+                total INTEGER,
+                reference TEXT,
+                paid INTEGER DEFAULT 0
+            )
+        """)
+        db.commit()
+@app.teardown_appcontext
+def close_connection(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
 conversation_history = {}
 pending_orders = {}
+
 
 def send_message(chat_id, text):
     requests.post(f"{BASE_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
@@ -55,7 +86,14 @@ def webhook():
 
     chat_id = message["chat"]["id"]
     user_text = message["text"]
-    user_name = message["from"].get("first_name", "Customer")
+
+    db = get_db()
+    cursor = db.execute("SELECT * FROM orders WHERE chat_id = ? AND paid = 0", (chat_id,))
+    unpaid_order = cursor.fetchone()
+
+    if unpaid_order:
+        send_message(chat_id, "⚠️ You have an unpaid order. Would you like to add to it or start a new order? Please reply with 'add' or 'restart'.")
+        return "awaiting clarification", 200
 
     # Handle session
     history = conversation_history.get(chat_id, [])
@@ -91,7 +129,7 @@ def webhook():
 
     response = client.chat.completions.create(
         model="meta-llama/Llama-3.3-70B-Instruct",
-        messages=[{"role": str(msg["role"]), "content": str(msg["content"])} for msg in history],
+        messages=history,
         temperature=0.7,
         max_tokens=300
     )
@@ -103,29 +141,22 @@ def webhook():
     # 💳 Extract total & create Paystack payment link
     total_match = re.search(r"total[:\s]*₦?(\d+)", assistant_reply, re.IGNORECASE)
     if total_match:
-        naira_total = int(total_match.group(1))
-        kobo_total = naira_total * 100  # ✅ convert to Kobo
-
+        total = int(total_match.group(1))
         order_summary = assistant_reply.split("complete payment")[0].strip()
 
-        payment_link, ref = create_paystack_link(
-            "customer@example.com",
-            kobo_total,
-            chat_id,
-            order_summary,
-            delivery_info={}  # Add later if needed
-        )
+        delivery_match = re.search(r"(table\s*number\s*:?.+|home delivery to .+)", user_text, re.IGNORECASE)
+        delivery_info = delivery_match.group(0).strip() if delivery_match else "Not provided"
 
-        assistant_reply += f"\n\nPlease complete payment here: {payment_link}"
+        payment_link, reference = create_paystack_link("customer@example.com", total, chat_id, order_summary, delivery_info)
 
-        pending_orders[chat_id] = {
-            "summary": order_summary,
-            "total": naira_total,
-            "ref": ref,
-            "paid": False
-        }
+        db.execute("""
+            INSERT INTO orders (chat_id, order_summary, delivery, total, reference)
+            VALUES (?, ?, ?, ?, ?)
+        """, (chat_id, order_summary, delivery_info, total, reference))
+        db.commit()
 
-    send_message(chat_id, assistant_reply)
+        send_message(chat_id, f"\nPlease complete payment here: {payment_link}")
+
     return "ok", 200
 
 @app.route("/verify", methods=["GET"])
@@ -134,31 +165,28 @@ def verify_payment():
     if not reference:
         return "Missing reference", 400
 
-    headers = {
-        "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"
-    }
+    headers = {"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"}
     r = requests.get(f"https://api.paystack.co/transaction/verify/{reference}", headers=headers)
     data = r.json()
-    
+
     if data["status"] and data["data"]["status"] == "success":
-        chat_id = data["data"]["metadata"].get("chat_id")
-        order_summary = data["data"]["metadata"].get("order_summary")
-        delivery = data["data"]["metadata"].get("delivery", "Not provided")
+        chat_id = str(data["data"]["metadata"].get("chat_id"))
+        db = get_db()
+        db.execute("UPDATE orders SET paid = 1 WHERE reference = ?", (reference,))
+        db.commit()
+
+        order = db.execute("SELECT order_summary, delivery FROM orders WHERE reference = ?", (reference,)).fetchone()
 
         send_message(chat_id, "✅ Order confirmed! Thank you for your payment.")
-        send_message(KITCHEN_CHAT_ID, f"📦 New Order:\n{order_summary}\n🏧 {delivery}")
-
-        if chat_id in pending_orders:
-            pending_orders[chat_id]["paid"] = True
-            conversation_history[chat_id] = conversation_history[chat_id][:1]  # reset
-
+        send_message(KITCHEN_CHAT_ID, f"food: {order[0]} | sum: ₦{data['data']['amount']//100} | {order[1]}")
         return "Payment confirmed", 200
+
     else:
-        chat_id = data.get("data", {}).get("metadata", {}).get("chat_id")
+        chat_id = str(data.get("data", {}).get("metadata", {}).get("chat_id"))
         if chat_id:
             send_message(chat_id, "❌ Payment failed. Please try again.")
         return "Payment failed", 400
-
+        
 if __name__ == "__main__":
     set_webhook()
     app.run(host="0.0.0.0", port=5000, debug=True)
