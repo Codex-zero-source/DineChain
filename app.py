@@ -13,6 +13,7 @@ from openai import OpenAI
 load_dotenv()
 app = Flask(__name__)
 app.register_blueprint(admin_bp)
+
 # Load menu
 with open("menu.json") as f:
     MENU = json.load(f)
@@ -66,20 +67,18 @@ def webhook():
                     "You are a polite and helpful restaurant customer service bot. "
                     "You help customers place orders, confirm their choices, ask for size or quantity, and calculate total cost. "
                     "After calculating, generate a Paystack payment link using `create_paystack_link`. "
-                    "Try to keep the conversation short and concise."
-                    "When you display the menu, only some menu items are displayed from foods and drinks category."
-                    "Each price is for 1 portion"
-                    "Before confirming order, ask if customer will: 1. Dine in (ask for table number) 2. Do home delivery (ask for delivery address)"
+                    "Try to keep the conversation short and concise. "
+                    "When you display the menu, only show items from the food and drinks category. "
+                    "Each price is for 1 portion. "
+                    "Before confirming order, ask if customer will: 1. Dine in (ask for table number), or 2. Do home delivery (ask for delivery address). "
                     "All prices and products are in naira. "
-                    "Each price to food item is for 1 portion. "
-                    "Before generating a payment link, ensure user is no longer asking for menu items. "
                     "Please include the total price in your reply, formatted like 'Total: ₦3000'. "
                     "Always end your response with the line: Total: ₦xxxx"
                 )
             }
         ]
 
-    # 🧾 Check if user has pending unpaid order
+    # 🧾 Check for unpaid order
     if chat_id in pending_orders and not pending_orders[chat_id]["paid"]:
         if "start over" in user_text.lower():
             pending_orders.pop(chat_id, None)
@@ -88,13 +87,11 @@ def webhook():
             send_message(chat_id, "🛒 You have an unpaid order. Type 'start over' to begin a new one, or add more to this order.")
             return "wait", 200
 
-    # ➕ Add user message
     history.append({"role": "user", "content": user_text})
 
-    # 🧠 Call LLM
     response = client.chat.completions.create(
         model="meta-llama/Llama-3.3-70B-Instruct",
-        messages=[{"role": str(msg["role"]), "content": str(msg["content"])} for msg in history],  # type: ignore
+        messages=[{"role": str(msg["role"]), "content": str(msg["content"])} for msg in history],
         temperature=0.7,
         max_tokens=300
     )
@@ -107,15 +104,16 @@ def webhook():
     total_match = re.search(r"total[:\s]*₦?(\d+)", assistant_reply, re.IGNORECASE)
     if total_match:
         naira_total = int(total_match.group(1))
+        kobo_total = naira_total * 100  # ✅ convert to Kobo
 
         order_summary = assistant_reply.split("complete payment")[0].strip()
 
         payment_link, ref = create_paystack_link(
             "customer@example.com",
-            naira_total,
+            kobo_total,
             chat_id,
             order_summary,
-            delivery_info={} # Add delivery info if needed
+            delivery_info={}  # Add later if needed
         )
 
         assistant_reply += f"\n\nPlease complete payment here: {payment_link}"
@@ -149,6 +147,11 @@ def verify_payment():
 
         send_message(chat_id, "✅ Order confirmed! Thank you for your payment.")
         send_message(KITCHEN_CHAT_ID, f"📦 New Order:\n{order_summary}\n🏧 {delivery}")
+
+        if chat_id in pending_orders:
+            pending_orders[chat_id]["paid"] = True
+            conversation_history[chat_id] = conversation_history[chat_id][:1]  # reset
+
         return "Payment confirmed", 200
     else:
         chat_id = data.get("data", {}).get("metadata", {}).get("chat_id")
