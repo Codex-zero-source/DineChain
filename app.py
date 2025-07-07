@@ -70,7 +70,8 @@ def webhook():
                     f"Try to keep the conversation short and concise. If the user asks for a menu, just say 'Here's our today's menu:\n{MENU_TEXT}'"
                     "All prices and products are in naira. "
                     "Each price to food item is for 1 portion. "
-                    "Please include the total price in your reply, formatted like 'Total: ₦3000'."
+                    "Please include the total price in your reply, formatted like 'Total: ₦3000'. "
+                    "Always end your response with the line: Total: ₦xxxx"
                 )
             }
         ]
@@ -84,8 +85,6 @@ def webhook():
             return "wait", 200
 
     history.append({"role": "user", "content": user_text})
-    recent_context = [msg["content"] for msg in history if msg["role"] == "user"][-5:]
-    user_input_summary = "\n".join(recent_context)
 
     response = client.chat.completions.create(
         model="meta-llama/Llama-3.3-70B-Instruct",
@@ -107,7 +106,8 @@ def webhook():
             "customer@example.com",
             total,
             chat_id,
-            order_summary
+            order_summary,
+            {}  # Add empty dict for delivery_info parameter
         )
 
         assistant_reply += f"\n\nPlease complete payment here: {payment_link}"
@@ -140,8 +140,7 @@ def verify_payment():
         confirmation_message = f"✅ Payment successful!\n\nOrder: {order_summary}"
         send_message(chat_id, confirmation_message)
 
-        send_message(KITCHEN_CHAT_ID, f"📦 Order:
-{order_summary}")
+        send_message(KITCHEN_CHAT_ID, f"🚞 Order:{order_summary}")
 
         if chat_id in pending_orders:
             pending_orders[chat_id]["paid"] = True
