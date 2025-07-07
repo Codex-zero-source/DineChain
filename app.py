@@ -41,6 +41,12 @@ user_references = {}
 def send_message(chat_id, text):
     requests.post(f"{BASE_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
 
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Bot is alive ✅", 200
+
+
 # 📥 Telegram Webhook
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -155,4 +161,5 @@ def verify_payment():
 if __name__ == "__main__":
     set_webhook()
 
-    app.run(port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)
+
