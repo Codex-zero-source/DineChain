@@ -8,9 +8,12 @@ from flask import Flask, request, g
 from dotenv import load_dotenv
 from paystack import create_paystack_link
 from set_webhook import set_webhook
+from admin import admin_bp
 
 load_dotenv()
 app = Flask(__name__)
+app.register_blueprint(admin_bp)
+
 
 # Load menu.json
 with open("menu.json") as f:
