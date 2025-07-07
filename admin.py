@@ -1,4 +1,3 @@
-# admin.py
 from flask import Blueprint, render_template_string, g
 import sqlite3
 import os
