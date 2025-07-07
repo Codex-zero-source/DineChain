@@ -75,16 +75,35 @@ def webhook():
             },
             {
              "role": "system",
-             "content": f"Menu today:\n{MENU_TEXT}"
+             "content": (
+                f"Try to keep the conversation short and concise. If the user asks for a menu, just say 'Here's our today's menu:\n{MENU_TEXT}'"
+                "All prices and products are in naira"
+                "each price to food item is for 1 portion"
+             )
+            },
+            {
+                "role": "user",
+                "content": "I'd like another order, no long text"
+            },
+            {
+                "role": "assistant",
+                "content": f"Okay, what would you like to have today? Here's our menu:\n{MENU_TEXT}"
+            },
+            {
+                "role": "user",
+                "content": "I'd like to order jollof rice 2 portions, with beef"
+            },
+            {
+                "role": "assistant",
+                "content": f"Okay, what would you like to have today? Here's our menu:\n{MENU_TEXT}"
             }
-
         ]
 
     history.append({"role": "user", "content": user_text})
 
     response = client.chat.completions.create(
         model="meta-llama/Llama-3.3-70B-Instruct",
-        messages=history,  # history is highlighted because the type checker expects an Iterable[ChatCompletionMessageParam], but history is a list of dicts; to fix, ensure history matches the expected schema or use the OpenAI types.
+        messages= history,  # history is highlighted because the type checker expects an Iterable[ChatCompletionMessageParam], but history is a list of dicts; to fix, ensure history matches the expected schema or use the OpenAI types.
         temperature=0.7,
         max_tokens=200
     )
@@ -106,14 +125,14 @@ def webhook():
         item_list = "\n".join([f"{name}: ₦{price}" for name, price in items])
         order_summary = f"{item_list}\nTotal: ₦{total}"
 
-        payment_link, ref = create_paystack_link(
-            "customer@example.com",
-            total,
-            chat_id,
-            order_summary
-        )
+    payment_link, ref = create_paystack_link(
+        "customer@example.com",
+        total,
+        chat_id,
+        order_summary
+    )
 
-        assistant_reply += f"\n\nYour order:\n{order_summary}\nPlease complete payment: {payment_link}"
+    assistant_reply += f"\n\nYour order:\n{order_summary}\nPlease complete payment: {payment_link}"
 
 
     send_message(chat_id, assistant_reply)
