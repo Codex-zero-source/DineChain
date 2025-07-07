@@ -1,0 +1,16 @@
+{
+  "food": {
+    "jollof rice": 1500,
+    "fried rice": 1500,
+    "pizza": 2500,
+    "shawarma": 1800
+  },
+  "drinks": {
+    "mojitos": 1000,
+    "tequila": 2000,
+    "hollandia": 800,
+    "pepsi": 500,
+    "coca cola": 500
+  }
+}
+
