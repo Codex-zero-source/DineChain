@@ -7,6 +7,8 @@ def create_paystack_link(email, amount, chat_id, order_summary, delivery_info):
     secret_key = os.getenv("PAYSTACK_SECRET_KEY")
     reference = str(uuid.uuid4())
 
+    
+
     headers = {
         "Authorization": f"Bearer {secret_key}",
         "Content-Type": "application/json"
@@ -20,8 +22,10 @@ def create_paystack_link(email, amount, chat_id, order_summary, delivery_info):
         "callback_url": f"https://{os.getenv('RENDER_SERVICE_NAME')}.onrender.com/verify?reference={reference}",
         "metadata": {
             "chat_id": chat_id,
-            "order_summary": order_summary
+            "order_summary": order_summary,
+            "delivery": delivery_info
         }
+
     }
 
     response = requests.post("https://api.paystack.co/transaction/initialize", json=payload, headers=headers)

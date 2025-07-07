@@ -7,10 +7,12 @@ from flask import Flask, request
 from dotenv import load_dotenv
 from paystack import create_paystack_link
 from set_webhook import set_webhook
+from admin import admin_bp
+from openai import OpenAI
 
 load_dotenv()
 app = Flask(__name__)
-
+app.register_blueprint(admin_bp)
 # Load menu
 with open("menu.json") as f:
     MENU = json.load(f)
@@ -31,7 +33,7 @@ KITCHEN_CHAT_ID = os.getenv("KITCHEN_CHAT_ID")
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
 
-client = openai.OpenAI(api_key=LLM_API_KEY, base_url=os.getenv("BASE_URL"))
+client = OpenAI(api_key=LLM_API_KEY, base_url=os.getenv("BASE_URL"))
 
 conversation_history = {}
 pending_orders = {}
@@ -91,7 +93,7 @@ def webhook():
     # 🧠 Call LLM
     response = client.chat.completions.create(
         model="meta-llama/Llama-3.3-70B-Instruct",
-        messages=history,
+        messages=[{"role": str(msg["role"]), "content": str(msg["content"])} for msg in history],  # type: ignore
         temperature=0.7,
         max_tokens=300
     )
@@ -113,7 +115,7 @@ def webhook():
             kobo_total,
             chat_id,
             order_summary,
-            {}  # Add delivery info if needed
+            delivery_info={} # Add delivery info if needed
         )
 
         assistant_reply += f"\n\nPlease complete payment here: {payment_link}"
@@ -139,21 +141,15 @@ def verify_payment():
     }
     r = requests.get(f"https://api.paystack.co/transaction/verify/{reference}", headers=headers)
     data = r.json()
-
+    
     if data["status"] and data["data"]["status"] == "success":
         chat_id = data["data"]["metadata"].get("chat_id")
         order_summary = data["data"]["metadata"].get("order_summary")
+        delivery = data["data"]["metadata"].get("delivery", "Not provided")
 
-        # ✅ Mark paid & reset session
-        if chat_id in pending_orders:
-            pending_orders[chat_id]["paid"] = True
-            conversation_history[chat_id] = conversation_history[chat_id][:1]
-
-        send_message(chat_id, f"✅ Payment successful!\n\nOrder confirmed 🎉\n\n{order_summary}")
-        send_message(KITCHEN_CHAT_ID, f"🍽️ New Order:\n{order_summary}")
-
+        send_message(chat_id, "✅ Order confirmed! Thank you for your payment.")
+        send_message(KITCHEN_CHAT_ID, f"📦 New Order:\n{order_summary}\n🏧 {delivery}")
         return "Payment confirmed", 200
-
     else:
         chat_id = data.get("data", {}).get("metadata", {}).get("chat_id")
         if chat_id:
