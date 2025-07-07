@@ -101,7 +101,8 @@ You help customers:
 - Confirm sizes and quantity
 - Calculate total based on this menu:
 {MENU_TEXT}
-
+When you display the menu, only some menu items are displayed from foods and drinks category. 
+You can only display the menu items that are in the menu.json file.
 Each price is for 1 portion, and all prices are in naira.
 After confirming order, ask if customer will:
 1. Dine in (ask for table number)
