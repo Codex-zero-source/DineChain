@@ -6,6 +6,7 @@ from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 from orders import calculate_total
 from paystack import create_paystack_link
+from set_webhook import set_webhook
 
 load_dotenv()
 app = Flask(__name__)
@@ -152,4 +153,6 @@ def verify_payment():
     return jsonify({"status": "checked"}), 200
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    set_webhook()
+
+    app.run(port=5000)
