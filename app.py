@@ -3,20 +3,18 @@ import json
 import openai
 import requests
 import re
-from flask import Flask, request, jsonify
+from flask import Flask, request
 from dotenv import load_dotenv
 from paystack import create_paystack_link
 from set_webhook import set_webhook
-from datetime import datetime
 
 load_dotenv()
 app = Flask(__name__)
 
-# Load menu.json
+# Load menu
 with open("menu.json") as f:
     MENU = json.load(f)
 
-# Format into a readable string for system prompt
 def format_menu(menu):
     lines = []
     for category, items in menu.items():
@@ -26,7 +24,7 @@ def format_menu(menu):
 
 MENU_TEXT = format_menu(MENU)
 
-# 🔐 Environment variables
+# 🔐 Environment
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 LLM_API_KEY = os.getenv("LLM_API_KEY")
 KITCHEN_CHAT_ID = os.getenv("KITCHEN_CHAT_ID")
@@ -38,7 +36,6 @@ client = openai.OpenAI(api_key=LLM_API_KEY, base_url=os.getenv("BASE_URL"))
 conversation_history = {}
 pending_orders = {}
 
-# 📨 Telegram send
 def send_message(chat_id, text):
     requests.post(f"{BASE_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
 
@@ -49,7 +46,6 @@ def home():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json()
-
     message = data.get("message")
     if not message or "text" not in message:
         return "ignored", 200
@@ -58,6 +54,7 @@ def webhook():
     user_text = message["text"]
     user_name = message["from"].get("first_name", "Customer")
 
+    # Handle session
     history = conversation_history.get(chat_id, [])
     if not history:
         history = [
@@ -79,16 +76,19 @@ def webhook():
             }
         ]
 
-    if chat_id in pending_orders and not pending_orders[chat_id].get("paid"):
+    # 🧾 Check if user has pending unpaid order
+    if chat_id in pending_orders and not pending_orders[chat_id]["paid"]:
         if "start over" in user_text.lower():
             pending_orders.pop(chat_id, None)
             history = history[:1]  # reset to just system prompt
         else:
-            send_message(chat_id, "🛒 You have an unpaid order. Would you like to add to it or type 'start over' to begin a new one?")
+            send_message(chat_id, "🛒 You have an unpaid order. Type 'start over' to begin a new one, or add more to this order.")
             return "wait", 200
 
+    # ➕ Add user message
     history.append({"role": "user", "content": user_text})
 
+    # 🧠 Call LLM
     response = client.chat.completions.create(
         model="meta-llama/Llama-3.3-70B-Instruct",
         messages=history,
@@ -100,23 +100,27 @@ def webhook():
     history.append({"role": "assistant", "content": assistant_reply})
     conversation_history[chat_id] = history
 
+    # 💳 Extract total & create Paystack payment link
     total_match = re.search(r"total[:\s]*₦?(\d+)", assistant_reply, re.IGNORECASE)
     if total_match:
-        total = int(total_match.group(1))
+        naira_total = int(total_match.group(1))
+        kobo_total = naira_total * 100  # ✅ Convert to kobo for Paystack
+
         order_summary = assistant_reply.split("complete payment")[0].strip()
 
         payment_link, ref = create_paystack_link(
             "customer@example.com",
-            total,
+            kobo_total,
             chat_id,
             order_summary,
-            {}  # Add empty dict for delivery_info parameter
+            {}  # Add delivery info if needed
         )
 
         assistant_reply += f"\n\nPlease complete payment here: {payment_link}"
+
         pending_orders[chat_id] = {
             "summary": order_summary,
-            "total": total,
+            "total": naira_total,
             "ref": ref,
             "paid": False
         }
@@ -140,16 +144,16 @@ def verify_payment():
         chat_id = data["data"]["metadata"].get("chat_id")
         order_summary = data["data"]["metadata"].get("order_summary")
 
-        confirmation_message = f"✅ Payment successful!\n\nOrder: {order_summary}"
-        send_message(chat_id, confirmation_message)
-
-        send_message(KITCHEN_CHAT_ID, f"🚞 Order:{order_summary}")
-
+        # ✅ Mark paid & reset session
         if chat_id in pending_orders:
             pending_orders[chat_id]["paid"] = True
-            conversation_history[chat_id] = conversation_history[chat_id][:1]  # reset for next session
+            conversation_history[chat_id] = conversation_history[chat_id][:1]
+
+        send_message(chat_id, f"✅ Payment successful!\n\nOrder confirmed 🎉\n\n{order_summary}")
+        send_message(KITCHEN_CHAT_ID, f"🍽️ New Order:\n{order_summary}")
 
         return "Payment confirmed", 200
+
     else:
         chat_id = data.get("data", {}).get("metadata", {}).get("chat_id")
         if chat_id:
