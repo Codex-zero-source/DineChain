@@ -84,7 +84,7 @@ def webhook():
 
     response = client.chat.completions.create(
         model="meta-llama/Llama-3.3-70B-Instruct",
-        messages=history,
+        messages=history,  # history is highlighted because the type checker expects an Iterable[ChatCompletionMessageParam], but history is a list of dicts; to fix, ensure history matches the expected schema or use the OpenAI types.
         temperature=0.7,
         max_tokens=200
     )
@@ -104,20 +104,17 @@ def webhook():
 
     if total > 0:
         item_list = "\n".join([f"{name}: ₦{price}" for name, price in items])
-        payment_link, reference = create_paystack_link("customer@example.com", total)  # You can use user_name here too
+        order_summary = f"{item_list}\nTotal: ₦{total}"
 
-        # Store reference → chat_id mapping
-        user_references[reference] = {
-            "chat_id": chat_id,
-            "items": items,
-            "user": user_name,
-            "total": total
-        }
-
-        assistant_reply += (
-            f"\n\nYour order:\n{item_list}\nTotal: ₦{total}"
-            f"\n👉 [Click here to pay]({payment_link})"
+        payment_link, ref = create_paystack_link(
+            "customer@example.com",
+            total,
+            chat_id,
+            order_summary
         )
+
+        assistant_reply += f"\n\nYour order:\n{order_summary}\nPlease complete payment: {payment_link}"
+
 
     send_message(chat_id, assistant_reply)
     return "ok", 200
@@ -125,38 +122,37 @@ def webhook():
 @app.route("/verify", methods=["GET"])
 def verify_payment():
     reference = request.args.get("reference")
-    if not reference or reference not in user_references:
-        return jsonify({"error": "Invalid or unknown reference"}), 400
+    if not reference:
+        return "Missing reference", 400
 
     headers = {
-        "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"
+        "Authorization": f"Bearer {os.getenv('PAYSTACK_SECRET_KEY')}"
     }
     r = requests.get(f"https://api.paystack.co/transaction/verify/{reference}", headers=headers)
-    result = r.json()
+    data = r.json()
 
-    user_data = user_references[reference]
-    chat_id = user_data["chat_id"]
-    total = user_data["total"]
-    items = user_data["items"]
-    user_name = user_data["user"]
+    print("🎯 Payment verification response:", data)
+    if data["status"] and data["data"]["status"] == "success":
+        # ✅ Payment successful
 
-    if result["data"]["status"] == "success":
-        # ✅ Notify user
-        send_message(chat_id, f"✅ Payment of ₦{total} confirmed! Your order is being prepared.")
+        chat_id = data["data"]["metadata"].get("chat_id")
+        order_summary = data["data"]["metadata"].get("order_summary")
 
-        # 🧑‍🍳 Send to kitchen
-        order_summary = "\n".join([f"• {item}: ₦{price}" for item, price in items])
-        kitchen_note = (
-            f"🍽️ New Order from {user_name}:\n{order_summary}\nTotal: ₦{total}"
-        )
-        send_message(KITCHEN_CHAT_ID, kitchen_note)
+        confirmation_message = f"✅ Your payment was successful! 🎉\n\nOrder: {order_summary}"
+        send_message(chat_id, confirmation_message)
+
+        # Send to kitchen
+        kitchen_id = os.getenv("KITCHEN_ID")
+        send_message(kitchen_id, f"📦 New Order Received:\n{order_summary}")
+
+        return "Payment confirmed", 200
 
     else:
-        send_message(chat_id, "❌ Payment failed. Please try again.")
-
-    # Clean up memory
-    del user_references[reference]
-    return jsonify({"status": "checked"}), 200
+        # ❌ Payment failed
+        chat_id = data.get("data", {}).get("metadata", {}).get("chat_id")
+        if chat_id:
+            send_message(chat_id, "❌ Payment failed. Please try again.")
+        return "Payment failed", 400
 
 if __name__ == "__main__":
     set_webhook()

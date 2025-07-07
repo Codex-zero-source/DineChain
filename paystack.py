@@ -2,13 +2,9 @@ import os
 import requests
 import uuid
 
-def create_paystack_link(email, amount):
+def create_paystack_link(email, amount, chat_id, order_summary):
     secret_key = os.getenv("PAYSTACK_SECRET_KEY")
-    domain_url = os.getenv("DOMAIN_URL")
-    if not (secret_key or domain_url):
-        raise Exception("Missing PAYSTACK_SECRET_KEY in .env")
-
-    reference = str(uuid.uuid4())  # Unique ID
+    reference = str(uuid.uuid4())
 
     headers = {
         "Authorization": f"Bearer {secret_key}",
@@ -17,10 +13,14 @@ def create_paystack_link(email, amount):
 
     payload = {
         "email": email,
-        "amount": amount * 100,  # Paystack uses kobo
+        "amount": amount * 100,
         "reference": reference,
         "currency": "NGN",
-        "callback_url": f"https://{domain_url}/verify?reference={reference}"
+        "callback_url": f"https://{os.getenv('RENDER_SERVICE_NAME')}.onrender.com/verify?reference={reference}",
+        "metadata": {
+            "chat_id": chat_id,
+            "order_summary": order_summary
+        }
     }
 
     response = requests.post("https://api.paystack.co/transaction/initialize", json=payload, headers=headers)
