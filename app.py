@@ -125,7 +125,7 @@ def webhook():
         item_list = "\n".join([f"{name}: ₦{price}" for name, price in items])
         order_summary = f"{item_list}\nTotal: ₦{total}"
 
-    payment_link, ref = create_paystack_link(
+        payment_link, ref = create_paystack_link(
         "customer@example.com",
         total,
         chat_id,
