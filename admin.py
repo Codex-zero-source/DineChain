@@ -1,3 +1,4 @@
+# admin.py
 from flask import Blueprint, render_template_string, g
 import sqlite3
 import os
@@ -41,7 +42,7 @@ TEMPLATE = """
             <td>{{ order["total"] }}</td>
             <td>{{ '✅' if order["paid"] else '❌' }}</td>
             <td>{{ order["reference"] or '-' }}</td>
-            <td>{{ order["timestamp"] }}</td>
+            <td>{{ order.get("timestamp", '-') }}</td>
         </tr>
         {% endfor %}
     </table>
@@ -66,6 +67,9 @@ def close_connection(exception):
 @admin_bp.route("/admin")
 def dashboard():
     cur = get_db().cursor()
-    cur.execute("SELECT * FROM orders ORDER BY timestamp DESC")
+    try:
+        cur.execute("SELECT * FROM orders ORDER BY timestamp DESC")
+    except sqlite3.OperationalError:
+        cur.execute("SELECT * FROM orders")  # fallback if timestamp column doesn't exist
     orders = cur.fetchall()
     return render_template_string(TEMPLATE, orders=orders)
