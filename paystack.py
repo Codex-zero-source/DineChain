@@ -2,7 +2,8 @@ import os
 import requests
 import uuid
 
-def create_paystack_link(email, amount, chat_id, order_summary):
+
+def create_paystack_link(email, amount, chat_id, order_summary, delivery_info):
     secret_key = os.getenv("PAYSTACK_SECRET_KEY")
     reference = str(uuid.uuid4())
 
