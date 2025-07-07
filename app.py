@@ -107,13 +107,12 @@ def webhook():
     total_match = re.search(r"total[:\s]*₦?(\d+)", assistant_reply, re.IGNORECASE)
     if total_match:
         naira_total = int(total_match.group(1))
-        kobo_total = naira_total * 100  # ✅ Convert to kobo for Paystack
 
         order_summary = assistant_reply.split("complete payment")[0].strip()
 
         payment_link, ref = create_paystack_link(
             "customer@example.com",
-            kobo_total,
+            naira_total,
             chat_id,
             order_summary,
             delivery_info={} # Add delivery info if needed
