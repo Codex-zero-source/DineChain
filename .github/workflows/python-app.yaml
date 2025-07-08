@@ -1,29 +1,20 @@
 services:
   - type: web
-    name: restaurant-chatbot
-    runtime: python
-    buildCommand: |
-      pip install -r requirements.txt
-    startCommand: |
-      gunicorn app:app --bind 0.0.0.0:$PORT
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: restaurant-db
-          property: connectionString
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: LLM_API_KEY
-        sync: false
-      - key: KITCHEN_CHAT_ID
-        sync: false
-      - key: PAYSTACK_SECRET_KEY
-        sync: false
-      - key: BASE_URL
-        value: https://api.groq.com/openai/v1
-
-databases:
-  - name: restaurant-db
-    databaseName: restaurant
-    user: restaurant_user
+    name: restaurant-bot
+    env: python
     plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+      - key: TELEGRAM_BOT_TOKEN
+        value: your_telegram_bot_token
+      - key: LLM_API_KEY
+        value: your_openai_api_key
+      - key: PAYSTACK_SECRET_KEY
+        value: your_paystack_secret_key
+      - key: KITCHEN_CHAT_ID
+        value: your_kitchen_telegram_chat_id
+      - key: DATABASE_URL
+        value: your_postgres_database_url
