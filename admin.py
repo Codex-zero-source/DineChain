@@ -1,10 +1,15 @@
-from flask import Blueprint, render_template_string
+from flask import Blueprint, render_template_string, request, abort
 import os
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.pool import ConnectionPool
 
 admin_bp = Blueprint("admin", __name__)
 DATABASE_URL = os.getenv("DATABASE_URL")
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
+
+# Create a connection pool
+pool = ConnectionPool(conninfo=DATABASE_URL)
 
 TEMPLATE = """
 <!DOCTYPE html>
@@ -29,8 +34,13 @@ TEMPLATE = """
 
 @admin_bp.route("/admin")
 def admin_dashboard():
-    with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
-        with conn.cursor() as cur:
+    # Simple token-based authentication
+    provided_token = request.args.get("token")
+    if not ADMIN_TOKEN or provided_token != ADMIN_TOKEN:
+        abort(401) # Unauthorized
+
+    with pool.getconn() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("SELECT * FROM orders ORDER BY timestamp DESC")
             orders = cur.fetchall()
     return render_template_string(TEMPLATE, orders=orders)

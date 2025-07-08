@@ -3,6 +3,8 @@ import json
 import requests
 import re
 import psycopg
+from psycopg.rows import dict_row
+from psycopg.pool import ConnectionPool
 from flask import Flask, request
 from dotenv import load_dotenv
 from paystack import create_paystack_link
@@ -33,16 +35,19 @@ LLM_API_KEY = os.getenv("LLM_API_KEY")
 KITCHEN_CHAT_ID = os.getenv("KITCHEN_CHAT_ID")
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 DATABASE_URL = os.getenv("DATABASE_URL")
+PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
+
+# Create a connection pool
+pool = ConnectionPool(conninfo=DATABASE_URL)
 
 client = OpenAI(api_key=LLM_API_KEY, base_url=os.getenv("BASE_URL"))
-conversation_history = {}
-pending_orders = {}
+# conversation_history = {} # Removed: State will be in the database
 
 def send_message(chat_id, text):
     requests.post(f"{BASE_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
 
 def get_pg_conn():
-    return psycopg.connect(DATABASE_URL)
+    return pool.getconn()
 
 @app.route("/", methods=["GET"])
 def home():
@@ -58,16 +63,24 @@ def webhook():
     chat_id = str(message["chat"]["id"])
     user_text = message["text"]
 
-    with get_pg_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT * FROM orders WHERE chat_id = %s AND paid = FALSE", (chat_id,))
-            unpaid_order = cur.fetchone()
+    try:
+        with get_pg_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT history FROM conversations WHERE chat_id = %s", (chat_id,))
+                result = cur.fetchone()
+                history = json.loads(result[0]) if result else []
+
+                cur.execute("SELECT * FROM orders WHERE chat_id = %s AND paid = FALSE", (chat_id,))
+                unpaid_order = cur.fetchone()
+    except Exception as e:
+        print(f"Database error: {e}")
+        send_message(chat_id, "Sorry, I'm having trouble accessing your records. Please try again later.")
+        return "db_error", 500
 
     if unpaid_order:
         send_message(chat_id, "⚠️ You have an unpaid order. Reply with 'add' or 'restart'.")
         return "awaiting", 200
 
-    history = conversation_history.get(chat_id, [])
     if not history:
         history = [{
                 "role": "system",
@@ -85,25 +98,37 @@ def webhook():
                 )
             }]
 
-    if chat_id in pending_orders and not pending_orders[chat_id]["paid"]:
-        if "start over" in user_text.lower():
-            pending_orders.pop(chat_id)
-            history = history[:1]
-        else:
-            send_message(chat_id, "🛒 Unpaid order. Type 'start over' or add to it.")
-            return "wait", 200
-
     history.append({"role": "user", "content": user_text})
-    response = client.chat.completions.create(
-        model="meta-llama/Llama-3.3-70B-Instruct",
-        messages=history,
-        temperature=0.7,
-        max_tokens=300
-    )
+    
+    try:
+        response = client.chat.completions.create(
+            model="meta-llama/Llama-3.3-70B-Instruct",
+            messages=[{"role": msg["role"], "content": msg["content"]} for msg in history],  # type: ignore
+            temperature=0.7,
+            max_tokens=300
+        )
+        assistant_reply = response.choices[0].message.content or ""
+    except Exception as e:
+        print(f"LLM API error: {e}")
+        send_message(chat_id, "I'm sorry, I'm having trouble thinking right now. Please try again in a moment.")
+        return "llm_error", 500
 
-    assistant_reply = response.choices[0].message.content or ""
     history.append({"role": "assistant", "content": assistant_reply})
-    conversation_history[chat_id] = history
+    
+    try:
+        with get_pg_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO conversations (chat_id, history)
+                    VALUES (%s, %s)
+                    ON CONFLICT (chat_id) DO UPDATE
+                    SET history = EXCLUDED.history, last_updated = NOW();
+                """, (chat_id, json.dumps(history)))
+                conn.commit()
+    except Exception as e:
+        print(f"Conversation insertion error: {e}")
+        send_message(chat_id, "I couldn't save our conversation due to a database issue. Please try again.")
+        return "db_error", 500
 
     match = re.search(r"total[:\s]*₦?(\d+)", assistant_reply, re.IGNORECASE)
     if match:
@@ -114,21 +139,20 @@ def webhook():
 
         link, ref = create_paystack_link("customer@example.com", total, chat_id, order_summary, delivery_info)
 
-        with get_pg_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO orders (chat_id, summary, delivery, total, reference, paid, timestamp)
-                    VALUES (%s, %s, %s, %s, %s, FALSE, NOW())
-                """, (chat_id, order_summary, delivery_info, total, ref))
-                conn.commit()
+        try:
+            with get_pg_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO orders (chat_id, summary, delivery, total, reference, paid, timestamp)
+                        VALUES (%s, %s, %s, %s, %s, FALSE, NOW())
+                    """, (chat_id, order_summary, delivery_info, total, ref))
+                    conn.commit()
+        except Exception as e:
+            print(f"Order insertion error: {e}")
+            send_message(chat_id, "I couldn't save your order due to a database issue. Please try again.")
+            return "db_error", 500
 
         assistant_reply += f"\n\nPlease complete payment here: {link}"
-        pending_orders[chat_id] = {
-            "summary": order_summary,
-            "total": total,
-            "ref": ref,
-            "paid": False
-        }
 
     send_message(chat_id, assistant_reply)
     return "ok", 200
