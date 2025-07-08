@@ -16,7 +16,7 @@ def create_paystack_link(email, amount, chat_id, order_summary, delivery_info):
 
     payload = {
         "email": email,
-        "amount": amount * 100,
+        "amount": int(amount * 100),
         "reference": reference,
         "currency": "NGN",
         "callback_url": f"https://{os.getenv('RENDER_SERVICE_NAME')}.onrender.com/verify?reference={reference}",
