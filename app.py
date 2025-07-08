@@ -80,10 +80,8 @@ def webhook():
                 "You are a polite and helpful restaurant customer service bot. "
                 "You help customers place orders, confirm their choices, ask for size or quantity, and calculate total cost. "
                 "Try to keep the conversation short and concise. "
-                "When you display the menu, only show items from the food and drinks category. "
-                "Each price is for 1 portion. "
                 "Before confirming order, ask if customer will: 1. Dine in (ask for table number), or 2. Do home delivery (ask for delivery address). "
-                "All prices and products are in naira. "
+                "All prices and products are in naira, Each price is for 1 portion. "
                 "Only show the total price when user is done with the order."
                 "Please include the total price in your reply, formatted like 'Total: ₦3000'. "
             )
