@@ -2,19 +2,20 @@ import os
 import json
 import requests
 import re
-import psycopg
-from psycopg.rows import dict_row
-from psycopg.pool import ConnectionPool
 from flask import Flask, request
 from dotenv import load_dotenv
 from paystack import create_paystack_link
 from set_webhook import set_webhook
 from admin import admin_bp
 from openai import OpenAI
+from orders import get_db_conn, init_db
 
 load_dotenv()
 app = Flask(__name__)
 app.register_blueprint(admin_bp)
+
+# Initialize the database
+init_db()
 
 # Load menu
 with open("menu.json") as f:
@@ -34,20 +35,12 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 LLM_API_KEY = os.getenv("LLM_API_KEY")
 KITCHEN_CHAT_ID = os.getenv("KITCHEN_CHAT_ID")
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
-DATABASE_URL = os.getenv("DATABASE_URL")
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
 
-# Create a connection pool
-pool = ConnectionPool(conninfo=DATABASE_URL)
-
 client = OpenAI(api_key=LLM_API_KEY, base_url=os.getenv("BASE_URL"))
-# conversation_history = {} # Removed: State will be in the database
 
 def send_message(chat_id, text):
     requests.post(f"{BASE_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
-
-def get_pg_conn():
-    return pool.getconn()
 
 @app.route("/", methods=["GET"])
 def home():
@@ -63,72 +56,57 @@ def webhook():
     chat_id = str(message["chat"]["id"])
     user_text = message["text"]
 
-    try:
-        with get_pg_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT history FROM conversations WHERE chat_id = %s", (chat_id,))
-                result = cur.fetchone()
-                history = json.loads(result[0]) if result else []
+    conn = get_db_conn()
+    cursor = conn.cursor()
 
-                cur.execute("SELECT * FROM orders WHERE chat_id = %s AND paid = FALSE", (chat_id,))
-                unpaid_order = cur.fetchone()
-    except Exception as e:
-        print(f"Database error: {e}")
-        send_message(chat_id, "Sorry, I'm having trouble accessing your records. Please try again later.")
-        return "db_error", 500
-
+    # Check for unpaid orders
+    cursor.execute("SELECT * FROM orders WHERE chat_id = ? AND paid = 0", (chat_id,))
+    unpaid_order = cursor.fetchone()
     if unpaid_order:
         send_message(chat_id, "⚠️ You have an unpaid order. Reply with 'add' or 'restart'.")
+        conn.close()
         return "awaiting", 200
+
+    # Retrieve conversation history
+    cursor.execute("SELECT history FROM conversations WHERE chat_id = ?", (chat_id,))
+    result = cursor.fetchone()
+    history = json.loads(result['history']) if result else []
 
     if not history:
         history = [{
-                "role": "system",
-                "content": (
-                    "You are a polite and helpful restaurant customer service bot. "
-                    "You help customers place orders, confirm their choices, ask for size or quantity, and calculate total cost. "
-                    "After calculating, generate a Paystack payment link using `create_paystack_link`. "
-                    "Try to keep the conversation short and concise. "
-                    "When you display the menu, only show items from the food and drinks category. "
-                    "Each price is for 1 portion. "
-                    "Before confirming order, ask if customer will: 1. Dine in (ask for table number), or 2. Do home delivery (ask for delivery address). "
-                    "All prices and products are in naira. "
-                    "Please include the total price in your reply, formatted like 'Total: ₦3000'. "
-                    "Always end your response with the line: Total: ₦xxxx"
-                )
-            }]
+            "role": "system",
+            "content": (
+                "You are a polite and helpful restaurant customer service bot. "
+                "You help customers place orders, confirm their choices, ask for size or quantity, and calculate total cost. "
+                "After calculating, generate a Paystack payment link using `create_paystack_link`. "
+                "Try to keep the conversation short and concise. "
+                "When you display the menu, only show items from the food and drinks category. "
+                "Each price is for 1 portion. "
+                "Before confirming order, ask if customer will: 1. Dine in (ask for table number), or 2. Do home delivery (ask for delivery address). "
+                "All prices and products are in naira. "
+                "Please include the total price in your reply, formatted like 'Total: ₦3000'. "
+                "Always end your response with the line: Total: ₦xxxx"
+            )
+        }]
 
     history.append({"role": "user", "content": user_text})
-    
-    try:
-        response = client.chat.completions.create(
-            model="meta-llama/Llama-3.3-70B-Instruct",
-            messages=[{"role": msg["role"], "content": msg["content"]} for msg in history],  # type: ignore
-            temperature=0.7,
-            max_tokens=300
-        )
-        assistant_reply = response.choices[0].message.content or ""
-    except Exception as e:
-        print(f"LLM API error: {e}")
-        send_message(chat_id, "I'm sorry, I'm having trouble thinking right now. Please try again in a moment.")
-        return "llm_error", 500
 
+    response = client.chat.completions.create(
+        model="meta-llama/Llama-3.3-70B-Instruct",
+        messages=[{"role": msg["role"], "content": msg["content"]} for msg in history],
+        temperature=0.7,
+        max_tokens=300
+    )
+
+    assistant_reply = response.choices[0].message.content or ""
     history.append({"role": "assistant", "content": assistant_reply})
-    
-    try:
-        with get_pg_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO conversations (chat_id, history)
-                    VALUES (%s, %s)
-                    ON CONFLICT (chat_id) DO UPDATE
-                    SET history = EXCLUDED.history, last_updated = NOW();
-                """, (chat_id, json.dumps(history)))
-                conn.commit()
-    except Exception as e:
-        print(f"Conversation insertion error: {e}")
-        send_message(chat_id, "I couldn't save our conversation due to a database issue. Please try again.")
-        return "db_error", 500
+
+    # Save conversation history
+    cursor.execute(
+        "INSERT INTO conversations (chat_id, history) VALUES (?, ?) ON CONFLICT(chat_id) DO UPDATE SET history = excluded.history",
+        (chat_id, json.dumps(history))
+    )
+    conn.commit()
 
     match = re.search(r"total[:\s]*₦?(\d+)", assistant_reply, re.IGNORECASE)
     if match:
@@ -139,22 +117,16 @@ def webhook():
 
         link, ref = create_paystack_link("customer@example.com", total, chat_id, order_summary, delivery_info)
 
-        try:
-            with get_pg_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO orders (chat_id, summary, delivery, total, reference, paid, timestamp)
-                        VALUES (%s, %s, %s, %s, %s, FALSE, NOW())
-                    """, (chat_id, order_summary, delivery_info, total, ref))
-                    conn.commit()
-        except Exception as e:
-            print(f"Order insertion error: {e}")
-            send_message(chat_id, "I couldn't save your order due to a database issue. Please try again.")
-            return "db_error", 500
+        cursor.execute(
+            "INSERT INTO orders (chat_id, summary, delivery, total, reference) VALUES (?, ?, ?, ?, ?)",
+            (chat_id, order_summary, delivery_info, total, ref)
+        )
+        conn.commit()
 
         assistant_reply += f"\n\nPlease complete payment here: {link}"
 
     send_message(chat_id, assistant_reply)
+    conn.close()
     return "ok", 200
 
 @app.route("/verify", methods=["GET"])
@@ -163,21 +135,24 @@ def verify():
     if not ref:
         return "Missing reference", 400
 
-    r = requests.get(f"https://api.paystack.co/transaction/verify/{ref}", headers={"Authorization": f"Bearer {os.getenv('PAYSTACK_SECRET_KEY')}"})
+    r = requests.get(f"https://api.paystack.co/transaction/verify/{ref}", headers={"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"})
     data = r.json()
 
     if data["status"] and data["data"]["status"] == "success":
         chat_id = str(data["data"]["metadata"].get("chat_id"))
         delivery = data["data"]["metadata"].get("delivery")
-
-        with get_pg_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("UPDATE orders SET paid = TRUE WHERE reference = %s", (ref,))
-                cur.execute("SELECT summary FROM orders WHERE reference = %s", (ref,))
-                order = cur.fetchone()
+        
+        conn = get_db_conn()
+        cursor = conn.cursor()
+        
+        cursor.execute("UPDATE orders SET paid = 1 WHERE reference = ?", (ref,))
+        cursor.execute("SELECT summary, total FROM orders WHERE reference = ?", (ref,))
+        order = cursor.fetchone()
+        conn.commit()
+        conn.close()
 
         send_message(chat_id, "✅ Order confirmed! Thank you.")
-        send_message(KITCHEN_CHAT_ID, f"🍽️ Order: {order[0]} | ₦{data['data']['amount'] // 100} | {delivery}")
+        send_message(KITCHEN_CHAT_ID, f"🍽️ Order: {order['summary']} | ₦{order['total']} | {delivery}")
         return "confirmed", 200
 
     chat_id = str(data.get("data", {}).get("metadata", {}).get("chat_id"))
