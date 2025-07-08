@@ -163,7 +163,20 @@ def verify():
 
         # Notify user and kitchen
         send_message(chat_id, "✅ Order confirmed! Please wait while we prepare your order")
-        send_message(KITCHEN_CHAT_ID, f"🍽️ Order: {order['summary']} | ₦{order['total']} | {delivery}")
+        def format_kitchen_order(chat_id, summary, total, delivery):
+            # Parse items from summary into individual lines
+            lines = [f"🍽️ Order: {chat_id}"]
+            for match in re.findall(r"(\*?\s*[\w\s]+)\s*\(₦?([\d,]+)\)", summary):
+                item = match[0].strip(" *")
+                price = match[1].replace(",", "")
+                lines.append(f"{item}: ₦{int(price):,}")
+            lines.append(f"Total: ₦{int(total):,}")
+            lines.append(f"Delivery: {delivery}")
+            return "\n".join(lines)
+
+        kitchen_order = format_kitchen_order(chat_id, order['summary'], order['total'], delivery)
+        send_message(KITCHEN_CHAT_ID, kitchen_order)
+
         return "confirmed", 200
 
     # If payment failed
