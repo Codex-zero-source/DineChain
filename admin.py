@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template_string
 import os
-import psycopg2
-import psycopg2.extras
+import psycopg
+from psycopg.rows import dict_row
 
 admin_bp = Blueprint("admin", __name__)
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -29,9 +29,8 @@ TEMPLATE = """
 
 @admin_bp.route("/admin")
 def admin_dashboard():
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM orders ORDER BY timestamp DESC")
-    orders = cur.fetchall()
-    conn.close()
+    with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM orders ORDER BY timestamp DESC")
+            orders = cur.fetchall()
     return render_template_string(TEMPLATE, orders=orders)

@@ -2,7 +2,7 @@ import os
 import json
 import requests
 import re
-import psycopg2
+import psycopg
 from flask import Flask, request
 from dotenv import load_dotenv
 from paystack import create_paystack_link
@@ -42,7 +42,7 @@ def send_message(chat_id, text):
     requests.post(f"{BASE_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
 
 def get_pg_conn():
-    return psycopg2.connect(DATABASE_URL)
+    return psycopg.connect(DATABASE_URL)
 
 @app.route("/", methods=["GET"])
 def home():
