@@ -107,9 +107,10 @@ def webhook():
     )
     conn.commit()
 
-    match = re.search(r"total[:\s]*₦?(\d+)", assistant_reply, re.IGNORECASE)
+    match = re.search(r"total[:\s]*₦?([\d,]+)", assistant_reply, re.IGNORECASE)
     if match:
-        total = int(match.group(1))
+        total_str = match.group(1).replace(",", "")
+        total = int(total_str)
         order_summary = assistant_reply.split("complete payment")[0].strip()
         delivery_match = re.search(r"(table\s*number\s*:?.+|home delivery to .+)", user_text, re.IGNORECASE)
         delivery_info = delivery_match.group(0).strip() if delivery_match else "Not provided"
