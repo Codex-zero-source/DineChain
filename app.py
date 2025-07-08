@@ -70,7 +70,8 @@ def webhook():
     # Retrieve conversation history
     cursor.execute("SELECT history FROM conversations WHERE chat_id = ?", (chat_id,))
     result = cursor.fetchone()
-    history = json.loads(result['history']) if result else []
+    history = json.loads(result['history']) if result and result['history'] else []
+
 
     if not history:
         history = [{
@@ -163,7 +164,7 @@ def verify():
         conn.close()
 
         # Notify user and kitchen
-        send_message(chat_id, "✅ Order confirmed! Please wait for your order")
+        send_message(chat_id, "✅ Order confirmed! Please wait while we prepare your order")
         send_message(KITCHEN_CHAT_ID, f"🍽️ Order: {order['summary']} | ₦{order['total']} | {delivery}")
         return "confirmed", 200
 
