@@ -3,7 +3,6 @@ import os
 from orders import get_db_conn
 
 admin_bp = Blueprint("admin", __name__)
-ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
 
 TEMPLATE = """
 <!DOCTYPE html>
@@ -28,11 +27,6 @@ TEMPLATE = """
 
 @admin_bp.route("/admin")
 def admin_dashboard():
-    # Simple token-based authentication
-    provided_token = request.args.get("token")
-    if not ADMIN_TOKEN or provided_token != ADMIN_TOKEN:
-        abort(401) # Unauthorized
-
     conn = get_db_conn()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM orders ORDER BY timestamp DESC")

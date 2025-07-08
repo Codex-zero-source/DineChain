@@ -1,18 +1,18 @@
 {
   "Food": {
     "Soup & Sauce": {
-      "Stew": 3000,
-      "Palm Oil Stew": 3000,
-      "Egg Sauce": 3000,
-      "Chicken Sauce": 5000,
-      "Carrot Sauce": 3000,
+      "Stew": "N3,000",
+      "Palm Oil Stew": "N3,000",
+      "Egg Sauce": "N3,000",
+      "Chicken Sauce": "N5,000",
+      "Carrot Sauce": "N3,000",
       "Prawn Sauce": "Request",
       "Ofada Sauce": "Request",
-      "Vegetable Soup": 6000,
-      "Egusi Soup": 8500,
-      "Ogbonor Soup": 8500,
-      "Okra Soup": 6500,
-      "Eforiro": 7000,
+      "Vegetable Soup": "N6,000",
+      "Egusi Soup": "N8,500",
+      "Ogbonor Soup": "N8,500",
+      "Okra Soup": "N6,500",
+      "Eforiro": "N7,000",
       "Oha Soup": "Request",
       "White Soup": "Request",
       "Afang Soup": "Request",
@@ -20,24 +20,24 @@
       "Banga Soup": "Request"
     },
     "Rice": {
-      "Jollof Rice": 5000,
-      "Fried Rice": 7000,
-      "White Rice": 4000,
-      "Ofada Rice": 7000,
-      "Palm Oil Jollof": 6000,
-      "Basmatic Rice": 10000
+      "Jollof Rice": "N5,000",
+      "Fried Rice": "N7,000",
+      "White Rice": "N4,000",
+      "Ofada Rice": "N7,000",
+      "Palm Oil Jollof": "N6,000",
+      "Basmatic Rice": "N10,000"
     },
     "Noodles & Pasta": {
-      "Indomie": 5000,
-      "Macaroni": 5000,
-      "Spaghetti": 5000,
-      "Couscous": 6000
+      "Indomie": "N5,000",
+      "Macaroni": "N5,000",
+      "Spaghetti": "N5,000",
+      "Couscous": "N6,000"
     },
     "Swallow Per Wrap": {
-      "Eba": 200,
-      "Semovita": 200,
-      "Wheat Meal": 400,
-      "Poundo Yam": 500
+      "Eba": "N2,000",
+      "Semovita": "N2,000",
+      "Wheat Meal": "N4,000",
+      "Poundo Yam": "N5,000"
     }
   },
   "Drinks": {

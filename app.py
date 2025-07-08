@@ -129,32 +129,45 @@ def webhook():
     conn.close()
     return "ok", 200
 
+# Verify payment status via Paystack
 @app.route("/verify", methods=["GET"])
 def verify():
     ref = request.args.get("reference")
     if not ref:
         return "Missing reference", 400
 
-    r = requests.get(f"https://api.paystack.co/transaction/verify/{ref}", headers={"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"})
+    # Verify payment status via Paystack
+    r = requests.get(
+        f"https://api.paystack.co/transaction/verify/{ref}",
+        headers={"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"}
+    )
     data = r.json()
 
-    if data["status"] and data["data"]["status"] == "success":
+    if data.get("status") and data["data"].get("status") == "success":
         chat_id = str(data["data"]["metadata"].get("chat_id"))
         delivery = data["data"]["metadata"].get("delivery")
-        
+
         conn = get_db_conn()
         cursor = conn.cursor()
-        
+
+        # Mark order as paid
         cursor.execute("UPDATE orders SET paid = 1 WHERE reference = ?", (ref,))
+        # Get order details
         cursor.execute("SELECT summary, total FROM orders WHERE reference = ?", (ref,))
         order = cursor.fetchone()
+
+        # Clear conversation/cart session
+        cursor.execute("UPDATE conversations SET history = NULL WHERE chat_id = ?", (chat_id,))
+
         conn.commit()
         conn.close()
 
-        send_message(chat_id, "✅ Order confirmed! Thank you.")
+        # Notify user and kitchen
+        send_message(chat_id, "✅ Order confirmed! Please wait for your order")
         send_message(KITCHEN_CHAT_ID, f"🍽️ Order: {order['summary']} | ₦{order['total']} | {delivery}")
         return "confirmed", 200
 
+    # If payment failed
     chat_id = str(data.get("data", {}).get("metadata", {}).get("chat_id"))
     if chat_id:
         send_message(chat_id, "❌ Payment failed. Try again.")
