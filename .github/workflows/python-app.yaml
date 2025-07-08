@@ -1,29 +1,29 @@
-# File: .github/workflows/render-deploy.yaml
-name: 🚀 Deploy to Render
+services:
+  - type: web
+    name: restaurant-chatbot
+    runtime: python
+    buildCommand: |
+      pip install -r requirements.txt
+    startCommand: |
+      gunicorn app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: restaurant-db
+          property: connectionString
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: KITCHEN_CHAT_ID
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: BASE_URL
+        value: https://api.groq.com/openai/v1
 
-on:
-  push:
-    branches:
-      - main  # or 'master' based on your repo
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v3
-
-      - name: 📦 Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.10
-
-      - name: 🔧 Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: 🚀 Deploy to Render
-        run: |
-          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
+databases:
+  - name: restaurant-db
+    databaseName: restaurant
+    user: restaurant_user
+    plan: free
