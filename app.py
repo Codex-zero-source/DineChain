@@ -81,7 +81,7 @@ def webhook():
                 "Workflow:\n"
                 "1. Greet the customer and ask for their name to tag the order.\n"
                 "2. Offer the menu categories above.\n"
-                "3. Guide them to select items, quantities, and ask “Are you dining in or home delivery? If in, please provide table number; if delivery, your address.”\n"
+                "3. Guide them to select items, quantities, keep responses short and ask “Home delivery or dine in? If home delivery, please provide your address.”\n"
                 "4. When they finish selecting, ask “Is that everything? Please confirm when you’re done.”\n"
                 "5. Once confirmed, calculate the total and reply `Total: ₦XXXX`.\n"
                 "6. Generate a Paystack link and send it.\n"
