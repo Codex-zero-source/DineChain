@@ -83,7 +83,32 @@ def webhook():
                 "Before confirming order, ask if customer will: 1. Dine in (ask for table number), or 2. Do home delivery (ask for delivery address). "
                 "All prices and products are in naira, Each price is for 1 portion. "
                 "Only show the total price when user is done with the order."
-                "Please include the total price in your reply, formatted like 'Total: ₦3000'. "
+                "Please include the total price in your reply, formatted like 'Total: ₦3000'. "   
+                "If the customer seems unsure about what to order, recommend a combo that pairs one food item with a suitable drink. Dynamically choose items from the menu, considering both food categories and drink types. Use these guidelines:"
+                "Affordable: total under ₦7,000"
+                "Average: ₦7,000–₦10,000"
+                "Premium: above ₦10,000"
+
+                "Pairings:"
+                "Light meals (Rice, Noodles & Pasta) → Milkshakes or Mocktails"
+                "Heavy meals (Soup & Sauce + Swallow) → Non-Alcoholic Wine or Beer"
+                "For luxury or celebration → Cocktails, Whiskey, or Cognac"
+
+                "If user is in a hurry, recommend quick-prep items like Jollof Rice or Indomie with drinks like Pure Heaven or Chapman."
+
+                "If user says “surprise me”, pick a balanced combo within ₦7,000–₦10,000 range from different categories."
+
+                "If user asks for spicy, recommend options like Ofada Sauce or Spaghetti with Spicy Mocktail."
+
+                "If user wants sweet, recommend desserts or sweet wines."
+
+                "Format suggestions like this:"
+                "💡 Need help deciding? You might enjoy:"
+                "🍛 Jollof Rice (₦5,000)"
+                "🥤 Vanilla Milkshake (₦3,000)"
+                "Total: ₦8,000"
+
+                "End response with: Total: ₦xxxx"
             )
         }]
 
