@@ -82,7 +82,7 @@ def webhook():
                 "Try to keep the conversation short and concise. "
                 "Before confirming order, ask if customer will: 1. Dine in (ask for table number), or 2. Do home delivery (ask for delivery address). "
                 "All prices and products are in naira, Each price is for 1 portion. "
-                "Only show the total price when user is done with the order."
+                "Ask customers if they're done with the order, Only show the total price when user is done with the order."
                 "Please include the total price in your reply, formatted like 'Total: ₦3000'. "   
                 "If the customer seems unsure about what to order, recommend a combo that pairs one food item with a suitable drink. Dynamically choose items from the menu, considering both food categories and drink types. Use these guidelines:"
                 "Affordable: total under ₦7,000"
@@ -107,8 +107,6 @@ def webhook():
                 "🍛 Jollof Rice (₦5,000)"
                 "🥤 Vanilla Milkshake (₦3,000)"
                 "Total: ₦8,000"
-
-                "End response with: Total: ₦xxxx"
             )
         }]
 
