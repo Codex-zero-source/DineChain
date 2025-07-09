@@ -85,6 +85,7 @@ def webhook():
                 "5. Once confirmed, calculate the total and reply `Total: ₦XXXX`.\n"
                 "6. Generate a Paystack link and send it.\n"
                 "7. After payment, verify the transaction, clear the session, and notify kitchen:\n"
+                "8. If customer provides address before payment, include it in the order notification to the kitchen."
                 "   🍽️ Order for <Name> (chat_id):\n"
                 "   Jollof Rice: ₦5,000\n"
                 "   Vanilla Milkshake: ₦3,000\n"
