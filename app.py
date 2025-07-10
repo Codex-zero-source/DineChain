@@ -44,12 +44,16 @@ async def send_user_message(platform, chat_id, text):
             await http_client.post(url, json=payload)
     elif platform == "whatsapp":
         from twilio.rest import Client
-        twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-        twilio_client.messages.create(
-            body=text,
-            from_=f"whatsapp:{TWILIO_WHATSAPP_NUMBER}",
-            to=chat_id
-        )
+        
+        def send_twilio_message():
+            client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+            client.messages.create(
+                body=text,
+                from_=f"whatsapp:{TWILIO_WHATSAPP_NUMBER}",
+                to=chat_id
+            )
+        
+        await asyncio.to_thread(send_twilio_message)
 
 @app.route("/", methods=["GET"])
 def home():
