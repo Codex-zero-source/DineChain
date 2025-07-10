@@ -35,13 +35,13 @@ TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
 
 client = OpenAI(api_key=LLM_API_KEY, base_url=os.getenv("BASE_URL"))
-http_client = httpx.AsyncClient()
 
 async def send_user_message(platform, chat_id, text):
     if platform == "telegram":
-        url = f"{BASE_URL}/sendMessage"
-        payload = {"chat_id": chat_id, "text": text}
-        await http_client.post(url, json=payload)
+        async with httpx.AsyncClient() as http_client:
+            url = f"{BASE_URL}/sendMessage"
+            payload = {"chat_id": chat_id, "text": text}
+            await http_client.post(url, json=payload)
     elif platform == "whatsapp":
         from twilio.rest import Client
         twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
@@ -211,8 +211,9 @@ async def verify():
     # Verify payment status via Paystack
     url = f"https://api.paystack.co/transaction/verify/{ref}"
     headers = {"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"}
-    r = await http_client.get(url, headers=headers)
-    data = r.json()
+    async with httpx.AsyncClient() as http_client:
+        r = await http_client.get(url, headers=headers)
+        data = r.json()
 
     if data.get("status") and data["data"].get("status") == "success":
         # Note: The metadata from paystack needs to be updated to include platform
