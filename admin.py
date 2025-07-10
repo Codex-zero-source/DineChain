@@ -66,12 +66,13 @@ TEMPLATE = """
     <input type="text" id="searchInput" onkeyup="searchTable()" placeholder="Search for orders by any field...">
     <table id="ordersTable">
         <thead>
-            <tr><th>ID</th><th>Chat ID</th><th>Summary</th><th>Delivery</th><th>Total</th><th>Paid</th><th>Ref</th><th>Time</th></tr>
+            <tr><th>ID</th><th>Chat ID</th><th>Customer Name</th><th>Platform</th><th>Summary</th><th>Delivery</th><th>Total</th><th>Paid</th><th>Ref</th><th>Time</th></tr>
         </thead>
         <tbody>
         {% for order in orders %}
         <tr>
             <td>{{ order['id'] }}</td><td>{{ order['chat_id'] }}</td>
+            <td>{{ order['customer_name'] }}</td><td>{{ order['platform'] }}</td>
             <td>{{ order['summary'] }}</td><td>{{ order['delivery'] }}</td>
             <td>{{ order['total'] }}</td><td>{{ '✅' if order['paid'] else '❌' }}</td>
             <td>{{ order['reference'] or '-' }}</td><td>{{ order['timestamp'] }}</td>
@@ -111,10 +112,9 @@ function searchTable() {
 """
 
 @admin_bp.route("/admin")
-def admin_dashboard():
-    conn = get_db_conn()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM orders ORDER BY timestamp DESC")
-    orders = cursor.fetchall()
-    conn.close()
+async def admin_dashboard():
+    async with get_db_conn() as conn:
+        cursor = await conn.cursor()
+        await cursor.execute("SELECT * FROM orders ORDER BY timestamp DESC")
+        orders = await cursor.fetchall()
     return render_template_string(TEMPLATE, orders=orders)
