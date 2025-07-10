@@ -39,7 +39,7 @@ JollofAI is an AI-driven chatbot that simplifies ordering food wherever you are.
 
 ## 🔧 Getting Started
 
-- Test a running version 
+- [Test a running version](https://t.me/IO_agent_bot)
 
 ### Clone the repo
 
@@ -102,4 +102,32 @@ flask run --app app.py
 ngrok http 5000
 ```
 
-Copy the HTTPS URL and configure it in Telegram and Twilio as your webhook.
+This will give you a public HTTPS URL. Copy it, as you'll need it for the next step.
+
+## Webhook Configuration
+
+For the bot to receive messages, you need to configure webhooks for Telegram and Twilio to point to your running application.
+
+### Telegram Webhook
+
+Telegram sends message updates to a webhook URL you specify.
+
+-   **URL**: `https://<your-public-url>/webhook`
+-   **Method**: `POST`
+
+
+-  **Using the provided script**:
+    The `set_webhook.py` script uses the `RENDER_SERVICE_NAME` environment variable to construct the full URL and register it.
+    ```bash
+    python set_webhook.py
+    ```
+
+### Twilio (WhatsApp) Webhook
+
+1.  Go to your **Twilio Console**.
+2.  Navigate to **Messaging > Senders > WhatsApp Senders**.
+3.  Select your WhatsApp number.
+4.  Find the webhook configuration section. In the field labeled **"WHEN A MESSAGE COMES IN"**, enter your public URL with the `/twilio_webhook` endpoint.
+    -   **URL**: `https://<your-public-url>/twilio_webhook`
+    -   **Method**: `HTTP POST`
+5.  Save your changes.
