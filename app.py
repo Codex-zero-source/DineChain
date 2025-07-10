@@ -88,7 +88,7 @@ async def twilio_webhook():
     return str(response)
 
 async def process_message(platform, chat_id, user_text, customer_name):
-    async with await get_db_conn() as conn:
+    async with get_db_conn() as conn:
         cursor = await conn.cursor()
         
         # Check for unpaid orders
@@ -191,7 +191,7 @@ async def process_message(platform, chat_id, user_text, customer_name):
     await send_user_message(platform, chat_id, assistant_reply)
     
     # Check for unpaid orders - This block might be better placed within the DB connection block
-    async with await get_db_conn() as conn:
+    async with get_db_conn() as conn:
         cursor = await conn.cursor()
         await cursor.execute("SELECT * FROM orders WHERE chat_id = ? AND paid = 0", (chat_id,))
         unpaid_order = await cursor.fetchone()
@@ -220,7 +220,7 @@ async def verify():
         delivery = data["data"]["metadata"].get("delivery")
         platform = data["data"]["metadata"].get("platform", "telegram") # Default to telegram for old orders
 
-        async with await get_db_conn() as conn:
+        async with get_db_conn() as conn:
             cursor = await conn.cursor()
 
             # Mark order as paid
@@ -228,6 +228,10 @@ async def verify():
             # Get order details
             await cursor.execute("SELECT customer_name, summary, total FROM orders WHERE reference = ?", (ref,))
             order = await cursor.fetchone()
+
+            if not order:
+                print(f"Error: No order found for reference {ref}")
+                return "failed", 400
 
             # Clear conversation/cart session
             await cursor.execute("UPDATE conversations SET history = NULL WHERE chat_id = ? AND platform = ?", (chat_id, platform))
@@ -239,16 +243,27 @@ async def verify():
         
         def format_kitchen_order(chat_id, customer_name, summary, total, delivery, platform):
             # Parse items from summary into individual lines
-            lines = [f"🍽️ Order for {customer_name} ({chat_id} on {platform}):"]
-            for match in re.findall(r"(\*?\s*[\w\s]+)\s*\(₦?([\d,]+)\)", summary):
+            lines = [f"🍽️ Order for {customer_name or 'N/A'} ({chat_id} on {platform}):"]
+            
+            # Ensure summary is a string before processing
+            order_summary = summary or ""
+            for match in re.findall(r"(\*?\s*[\w\s]+)\s*\(₦?([\d,]+)\)", order_summary):
                 item = match[0].strip(" *")
                 price = match[1].replace(",", "")
                 lines.append(f"{item}: ₦{int(price):,}")
-            lines.append(f"Total: ₦{int(total):,}")
-            lines.append(f"Delivery: {delivery}")
+            
+            lines.append(f"Total: ₦{int(total or 0):,}")
+            lines.append(f"Delivery: {delivery or 'Not specified'}")
             return "\n".join(lines)
 
-        kitchen_order = format_kitchen_order(chat_id, order['customer_name'], order['summary'], order['total'], delivery, platform)
+        kitchen_order = format_kitchen_order(
+            chat_id, 
+            order['customer_name'], 
+            order['summary'], 
+            order['total'], 
+            delivery, 
+            platform
+        )
         # Sending kitchen message via Telegram for now
         await send_user_message("telegram", KITCHEN_CHAT_ID, kitchen_order)
 
