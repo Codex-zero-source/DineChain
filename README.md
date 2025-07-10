@@ -39,11 +39,13 @@ JollofAI is an AI-driven chatbot that simplifies ordering food wherever you are.
 
 ## 🔧 Getting Started
 
+- Test a running version 
+
 ### Clone the repo
 
 ```bash
-git clone repo
-cd repo
+git clone https://github.com/Codex-zero-source/JollofAI
+cd JollofAI
 ```
 
 ### Set up a virtual environment
