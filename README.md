@@ -1,97 +1,103 @@
-# JollofAI - The Multichannel Food Ordering Bot
+# JollofAI
 
-JollofAI is an intelligent, AI-powered chatbot designed to streamline the food ordering process. It can handle customer interactions, take orders, process payments, and send notifications to the kitchen, all through familiar messaging platforms like Telegram and WhatsApp.
+JollofAI is an AI-driven chatbot that simplifies ordering food wherever you are. Whether your customers prefer Telegram or WhatsApp, JollofAI handles everything: greeting them, guiding them through the menu, processing payments, and notifying the kitchen once orders are confirmed.
 
-## Features
+## 🚀 Key Features
 
-- **AI-Powered Conversations:** Uses a meta-llama/Llama-3.3-70B-Instruct to provide natural and helpful interactions.
-- **Multi-Platform Support:** Seamlessly integrated with both Telegram and WhatsApp.
-- **Dynamic Menu:** Can present a full menu with recommendations to customers.
-- **Order Management:** Guides users through selecting items, confirming orders, and calculating totals.
-- **Integrated Payments:** Generates Paystack payment links for secure transactions.
-- **Kitchen Notifications:** Automatically sends order details to the kitchen's Telegram group upon successful payment.
-- **Asynchronous Architecture:** Built with `asyncio`, `httpx`, and `aiosqlite` for high performance and scalability.
-- **Admin Dashboard:** A simple web interface to view all orders.
+- **Natural Conversations**: Powered by a state-of-the-art LLM (meta-llama/Llama-3.3-70B-Instruct) to make chats feel smooth and intuitive.
+- **Multiple Channels**: Works seamlessly on both Telegram and WhatsApp.
+- **Interactive Menu**: Presents a dynamic menu, suggests popular dishes, and adapts to customer preferences.
+- **Order Management**: Guides users through choosing items, confirming details, and calculating totals automatically.
+- **Secure Payments**: Generates Paystack payment links and verifies transactions in real time.
+- **Kitchen Notifications**: Once payment clears, JollofAI sends a concise order summary to your kitchen’s Telegram group.
+- **Asynchronous & Scalable**: Built with asyncio, httpx, and aiosqlite for high performance under load.
+- **Admin Dashboard**: A simple web interface lets you view and manage all orders in one place.
 
-## How It Works
+## ⚙️ Architecture Overview
 
-The bot interacts with users on their preferred platform (Telegram or WhatsApp):
+### Messaging Layer
 
-1.  **Greeting & Menu:** The bot greets the user, asks for their name, and presents the menu.
-2.  **Order Taking:** The user selects items, and the AI assistant confirms the selections.
-3.  **Payment:** Once the order is confirmed, the bot calculates the total and provides a Paystack link.
-4.  **Verification & Confirmation:** After payment, the system verifies the transaction, confirms the order with the user, and sends the order details to the kitchen's Telegram group.
+- Telegram Bot API
+- Twilio WhatsApp API
 
-## Architecture
+### Business Logic
 
-- **Backend:** Flask (with async support)
-- **Messaging Platforms:**
-    - Telegram (via Telegram Bot API)
-    - WhatsApp (via Twilio API for WhatsApp)
-- **AI:** IO.net API (for Large Language Model access)
-- **Payments:** Paystack
-- **Database:** SQLite (with `aiosqlite` for async operations)
-- **HTTP Client:** `httpx` for asynchronous API calls
+- Flask (with async support) to handle incoming messages and webhooks.
+- IO.net API for LLM-driven chat intelligence.
 
-## Setup and Deployment Guide
+### Payments
 
-### 1. Prerequisites
+- Paystack for secure, seamless transactions.
 
-- Python 3.11+
-- A [Render](https://render.com/) account (or another deployment platform)
-- API keys and credentials from:
-    - Telegram (for a bot)
-    - An LLM provider (like OpenAI)
-    - Paystack
-    - Twilio
+### Data Storage
 
-### 2. Clone the Repository
+- SQLite (via aiosqlite) for lightweight, file-based storage.
+
+### Web Interface
+
+- An admin dashboard to track and manage orders.
+
+## 🔧 Getting Started
+
+### Clone the repo
 
 ```bash
 git clone repo
 cd repo
 ```
 
-### 3. Create a Virtual Environment
+### Set up a virtual environment
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # On Windows, use: .venv\Scripts\activate
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
-### 4. Install Dependencies
+### Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 5. Set Up Environment Variables
+### Configure environment variables
 
-Create a `.env` file in the root of the project and add the following variables.
+Create a `.env` file at the project root and add:
 
 ```
 # Telegram
-TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
-LLM_API_KEY=YOUR_LLM_API_KEY
-KITCHEN_CHAT_ID=YOUR_KITCHEN_TELEGRAM_CHAT_ID
-BASE_URL=YOUR_IO.NET_API_ENDPOINT # The API endpoint for the IO.net LLM
+TELEGRAM_BOT_TOKEN=...
+LLM_API_KEY=...
+KITCHEN_CHAT_ID=...
+BASE_URL=...  # LLM API endpoint
 
 # Paystack
-PAYSTACK_SECRET_KEY=YOUR_PAYSTACK_SECRET_KEY
+PAYSTACK_SECRET_KEY=...
 
-# Twilio (for WhatsApp)
-TWILIO_ACCOUNT_SID=YOUR_TWILIO_ACCOUNT_SID
-TWILIO_AUTH_TOKEN=YOUR_TWILIO_AUTH_TOKEN
-TWILIO_WHATSAPP_NUMBER=YOUR_TWILIO_WHATSAPP_NUMBER
+# Twilio (WhatsApp)
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+TWILIO_WHATSAPP_NUMBER=...
 
-# Deployment (e.g., Render service name)
-RENDER_SERVICE_NAME=your-service-name-on-render
+# Deployment (e.g., Render service)
+RENDER_SERVICE_NAME=...
 ```
 
-### 6. Initialize the Database
-
-Run the `orders.py` script to create the initial database file (`orders.db`).
+### Initialize the database
 
 ```bash
 python orders.py
 ```
+
+### Run the server
+
+```bash
+flask run --app app.py
+```
+
+### Expose your webhook (for development)
+
+```bash
+ngrok http 5000
+```
+
+Copy the HTTPS URL and configure it in Telegram and Twilio as your webhook.
