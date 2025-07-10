@@ -1,9 +1,9 @@
 import os
-import requests
+import httpx
 import uuid
 
 
-def create_paystack_link(email, amount, chat_id, order_summary, delivery_info):
+async def create_paystack_link(email, amount, chat_id, order_summary, delivery_info, platform="telegram"):
     secret_key = os.getenv("PAYSTACK_SECRET_KEY")
     reference = str(uuid.uuid4())
 
@@ -23,13 +23,15 @@ def create_paystack_link(email, amount, chat_id, order_summary, delivery_info):
         "metadata": {
             "chat_id": chat_id,
             "order_summary": order_summary,
-            "delivery": delivery_info
+            "delivery": delivery_info,
+            "platform": platform
         }
 
     }
 
-    response = requests.post("https://api.paystack.co/transaction/initialize", json=payload, headers=headers)
-    data = response.json()
+    async with httpx.AsyncClient() as client:
+        response = await client.post("https://api.paystack.co/transaction/initialize", json=payload, headers=headers)
+        data = response.json()
 
     if not data.get("status"):
         raise Exception(f"Paystack error: {data}")
