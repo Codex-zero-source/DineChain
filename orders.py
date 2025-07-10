@@ -19,6 +19,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             chat_id TEXT NOT NULL,
+            customer_name TEXT,
             summary TEXT,
             delivery TEXT,
             total INTEGER,

@@ -42,6 +42,7 @@ def webhook():
 
     chat_id = str(message["chat"]["id"])
     user_text = message["text"]
+    customer_name = message.get('from', {}).get('first_name', 'Valued Customer')
 
     conn = get_db_conn()
     cursor = conn.cursor()
@@ -112,13 +113,14 @@ def webhook():
 
     response = client.chat.completions.create(
         model="meta-llama/Llama-3.3-70B-Instruct",
-        messages=[{"role": msg["role"], "content": msg["content"]} for msg in history],
+        messages=[{"role": msg["role"], "content": msg["content"]} for msg in history],  # type: ignore
         temperature=0.7,
         max_tokens=300
     )
 
     assistant_reply = response.choices[0].message.content or ""
     history.append({"role": "assistant", "content": assistant_reply})
+
 
     # Save conversation history
     cursor.execute(
@@ -138,8 +140,8 @@ def webhook():
         link, ref = create_paystack_link("customer@example.com", total, chat_id, order_summary, delivery_info)
 
         cursor.execute(
-            "INSERT INTO orders (chat_id, summary, delivery, total, reference) VALUES (?, ?, ?, ?, ?)",
-            (chat_id, order_summary, delivery_info, total, ref)
+            "INSERT INTO orders (chat_id, customer_name, summary, delivery, total, reference) VALUES (?, ?, ?, ?, ?, ?)",
+            (chat_id, customer_name, order_summary, delivery_info, total, ref)
         )
         conn.commit()
 
@@ -148,7 +150,7 @@ def webhook():
     send_message(chat_id, assistant_reply)
     conn.close()
     return "ok", 200
-
+    
 # Verify payment status via Paystack
 @app.route("/verify", methods=["GET"])
 def verify():
@@ -173,7 +175,7 @@ def verify():
         # Mark order as paid
         cursor.execute("UPDATE orders SET paid = 1 WHERE reference = ?", (ref,))
         # Get order details
-        cursor.execute("SELECT summary, total FROM orders WHERE reference = ?", (ref,))
+        cursor.execute("SELECT customer_name, summary, total FROM orders WHERE reference = ?", (ref,))
         order = cursor.fetchone()
 
         # Clear conversation/cart session
@@ -184,9 +186,9 @@ def verify():
 
         # Notify user and kitchen
         send_message(chat_id, "✅ Order confirmed! Please wait while we prepare your order")
-        def format_kitchen_order(chat_id, summary, total, delivery):
+        def format_kitchen_order(chat_id, customer_name, summary, total, delivery):
             # Parse items from summary into individual lines
-            lines = [f"🍽️ Order: {chat_id}"]
+            lines = [f"🍽️ Order for {customer_name} ({chat_id}):"]
             for match in re.findall(r"(\*?\s*[\w\s]+)\s*\(₦?([\d,]+)\)", summary):
                 item = match[0].strip(" *")
                 price = match[1].replace(",", "")
@@ -195,7 +197,7 @@ def verify():
             lines.append(f"Delivery: {delivery}")
             return "\n".join(lines)
 
-        kitchen_order = format_kitchen_order(chat_id, order['summary'], order['total'], delivery)
+        kitchen_order = format_kitchen_order(chat_id, order['customer_name'], order['summary'], order['total'], delivery)
         send_message(KITCHEN_CHAT_ID, kitchen_order)
 
         return "confirmed", 200
