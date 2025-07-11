@@ -192,19 +192,8 @@ async def process_message(platform, chat_id, user_text, customer_name):
 
         history.append({"role": "user", "content": user_text})
 
-        assistant_reply = ""
-        try:
-            llm_response = await get_llm_response(history)
-            assistant_reply = llm_response['choices'][0]['message']['content'] or ""
-        except httpx.HTTPStatusError as e:
-            error_details = f"Status: {e.response.status_code}, Response: {e.response.text}"
-            print(f"LLM API Status Error: {e}. Details: {error_details}")
-            await send_user_message(platform, chat_id, "I'm having trouble thinking right now. Please try again in a moment.")
-            return
-        except Exception as e:
-            print(f"An unexpected error occurred when calling LLM API: {e}")
-            await send_user_message(platform, chat_id, "I'm having trouble thinking right now. Please try again in a moment.")
-            return
+        llm_response = await get_llm_response(history)
+        assistant_reply = llm_response['choices'][0]['message']['content'] or ""
 
         history.append({"role": "assistant", "content": assistant_reply})
 
