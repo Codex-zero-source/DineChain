@@ -12,6 +12,7 @@ from admin import admin_bp
 from openai import OpenAI
 from orders import get_db_conn, init_db
 import asyncio
+import openai
 
 load_dotenv()
 app = Flask(__name__)
@@ -28,7 +29,7 @@ asyncio.run(init_db())
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 LLM_API_KEY = os.getenv("LLM_API_KEY")
 KITCHEN_CHAT_ID = os.getenv("KITCHEN_CHAT_ID")
-BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
+TELEGRAM_BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
@@ -39,7 +40,7 @@ client = OpenAI(api_key=LLM_API_KEY, base_url=os.getenv("BASE_URL"))
 async def send_user_message(platform, chat_id, text):
     if platform == "telegram":
         async with httpx.AsyncClient() as http_client:
-            url = f"{BASE_URL}/sendMessage"
+            url = f"{TELEGRAM_BASE_URL}/sendMessage"
             payload = {"chat_id": chat_id, "text": text}
             await http_client.post(url, json=payload)
     elif platform == "whatsapp":
@@ -134,8 +135,8 @@ async def process_message(platform, chat_id, user_text, customer_name):
                     "5. Once confirmed, provide a clear, final summary of the order. Use the heading 'Your Order:' and list each item with its price. Calculate the total and display it clearly at the end. Finally, include a JSON block with the structured order details. Format it exactly like this, with no extra text after the closing brace:\n"
                     "```json\n"
                     "{\n"
-                    "  \"items\": [{\"name\": \"Jollof Rice\", \"price\": 5000}, {\"name\": \"Vanilla Milkshake\", \"price\": 3000}],\n"
-                    "  \"total\": 8000\n"
+                    "  \"items\": [{\"name\": \"Jollof Rice\", \"price\": 800}, {\"name\": \"Turkey\", \"price\": 800}],\n"
+                    "  \"total\": 1600\n"
                     "}\n"
                     "```\n"
                     "6. After presenting the final bill and the JSON, DO NOT mention payment. Simply stop and wait for the system to provide a payment link.\n"
@@ -146,19 +147,16 @@ async def process_message(platform, chat_id, user_text, customer_name):
                     "8. If the customer provided a delivery address before payment, include it in the notification to the kitchen.\n"
                     "Kitchen message format:\n"
                     "   🍽️ Order for <Name> (chat_id) on <platform>:\n"
-                    "   Jollof Rice: ₦5,000\n"
-                    "   Vanilla Milkshake: ₦3,000\n"
-                    "   Total: ₦8,000\n"
+                    "   Jollof Rice: ₦800\n"
+                    "   Turkey: ₦800\n"
+                    "   Total: ₦1,600\n"
                     "   Delivery: Table 15\n\n"
                     "Recommendations:\n"
-                    "- If unsure, suggest combos dynamically by category and budget:\n"
-                    "  • Affordable (under ₦7,000)\n"
-                    "  • Average (₦7,000–₦10,000)\n"
-                    "  • Premium (above ₦10,000)\n"
-                    "- Quick-snack: Indomie or Sharwarma + Pure Heaven or Chapman.\n"
-                    "- Surprise Me: pick a mid-range combo.\n"
-                    "- Spicy: Egusi Soup or Ofada Sauce + Spicy Mocktail.\n"
-                    "- Sweet: Chocolate Milkshake or Sweet Wine.\n\n"
+                    "- If unsure, suggest combos dynamically by category and budget.\n"
+                    "- Quick-snack: Shawarma and a Soda.\n"
+                    "- Surprise Me: Jollof Rice with Chicken.\n"
+                    "- Spicy: Egusi Soup with Apu.\n"
+                    "- Sweet: A Doughnut and a Milkshake.\n\n"
                     "Format recommendations as:\n"
                     "💡 You might enjoy our Pastries: \n"
                     "🥧 Meat Pie (₦700)\n"
@@ -173,14 +171,19 @@ async def process_message(platform, chat_id, user_text, customer_name):
 
         history.append({"role": "user", "content": user_text})
 
-        response = client.chat.completions.create(
-            model="meta-llama/Llama-3.3-70B-Instruct",
-            messages=[{"role": msg["role"], "content": msg["content"]} for msg in history],  # type: ignore
-            temperature=0.7,
-            max_tokens=400
-        )
+        try:
+            response = client.chat.completions.create(
+                model="meta-llama/Llama-3.3-70B-Instruct",
+                messages=[{"role": msg["role"], "content": msg["content"]} for msg in history],  # type: ignore
+                temperature=0.7,
+                max_tokens=400
+            )
+            assistant_reply = response.choices[0].message.content or ""
+        except openai.APIError as e:
+            print(f"OpenAI API Error: {e}")
+            await send_user_message(platform, chat_id, "I'm having trouble thinking right now. Please try again in a moment.")
+            return
 
-        assistant_reply = response.choices[0].message.content or ""
         history.append({"role": "assistant", "content": assistant_reply})
 
         # Save conversation history
