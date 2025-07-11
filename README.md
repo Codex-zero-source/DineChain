@@ -2,7 +2,7 @@
 
 JollofAI is an AI-powered WhatsApp and Telegram bot that helps customers of a restaurant to place orders for food and drinks.
 
-## 🚀 Key Features
+## Features
 
 - **Conversational Ordering:** Customers can place orders in a natural, conversational way.
 - **Paystack Integration:** Securely process payments using Paystack.
