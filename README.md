@@ -1,133 +1,99 @@
 # JollofAI
 
-JollofAI is an AI-driven chatbot that simplifies ordering food wherever you are. Whether your customers prefer Telegram or WhatsApp, JollofAI handles everything: greeting them, guiding them through the menu, processing payments, and notifying the kitchen once orders are confirmed.
+JollofAI is an AI-powered WhatsApp and Telegram bot that helps customers of a restaurant to place orders for food and drinks.
 
 ## 🚀 Key Features
 
-- **Natural Conversations**: Powered by a state-of-the-art LLM (meta-llama/Llama-3.3-70B-Instruct) to make chats feel smooth and intuitive.
-- **Multiple Channels**: Works seamlessly on both Telegram and WhatsApp.
-- **Interactive Menu**: Presents a dynamic menu, suggests popular dishes, and adapts to customer preferences.
-- **Order Management**: Guides users through choosing items, confirming details, and calculating totals automatically.
-- **Secure Payments**: Generates Paystack payment links and verifies transactions in real time.
-- **Kitchen Notifications**: Once payment clears, JollofAI sends a concise order summary to your kitchen’s Telegram group.
-- **Asynchronous & Scalable**: Built with asyncio, httpx, and aiosqlite for high performance under load.
-- **Admin Dashboard**: A simple web interface lets you view and manage all orders in one place.
+- **Conversational Ordering:** Customers can place orders in a natural, conversational way.
+- **Paystack Integration:** Securely process payments using Paystack.
+- **Telegram & WhatsApp Integration:** Works with both Telegram and WhatsApp.
+- **Order Notifications:** Instantly notifies the kitchen of new orders.
 
-## ⚙️ Architecture Overview
+## Getting Started
 
-### Messaging Layer
+### Prerequisites
 
-- Telegram Bot API
-- Twilio WhatsApp API
+- Python 3.10+
+- `pip` for package management
+- A Paystack account
+- A Telegram bot token
+- Twilio account for WhatsApp
 
-### Business Logic
+### Installation
 
-- Flask (with async support) to handle incoming messages and webhooks.
-- IO.net API for LLM-driven chat intelligence.
-
-### Payments
-
-- Paystack for secure, seamless transactions.
-
-### Data Storage
-
-- SQLite (via aiosqlite) for lightweight, file-based storage.
-
-### Web Interface
-
-- An admin dashboard to track and manage orders.
-
-## 🔧 Getting Started
-
-- [Test a running version](https://t.me/IO_agent_bot)
-
-### Clone the repo
+1.  **Clone the repository:**
 
 ```bash
 git clone https://github.com/Codex-zero-source/JollofAI
 cd JollofAI
 ```
 
-### Set up a virtual environment
+2.  **Create and activate a virtual environment:**
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
-
-### Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### Configure environment variables
-
-Create a `.env` file at the project root and add:
-
-```
-# Telegram
-TELEGRAM_BOT_TOKEN=...
-LLM_API_KEY=...
-KITCHEN_CHAT_ID=...
-BASE_URL=...  # LLM API endpoint
-
-# Paystack
-PAYSTACK_SECRET_KEY=...
-
-# Twilio (WhatsApp)
-TWILIO_ACCOUNT_SID=...
-TWILIO_AUTH_TOKEN=...
-TWILIO_WHATSAPP_NUMBER=...
-
-# Deployment (e.g., Render service)
-RENDER_SERVICE_NAME=...
-```
-
-### Initialize the database
-
-```bash
-python orders.py
-```
-
-### Run the server
-
-```bash
-flask run --app app.py
-```
-
-### Expose your webhook (for development)
-
-```bash
-ngrok http 5000
-```
-
-This will give you a public HTTPS URL. Copy it, as you'll need it for the next step.
-
-## Webhook Configuration
-
-For the bot to receive messages, you need to configure webhooks for Telegram and Twilio to point to your running application.
-
-### Telegram Webhook
-
-Telegram sends message updates to a webhook URL you specify.
-
--   **URL**: `https://<your-public-url>/webhook`
--   **Method**: `POST`
-
-
--  **Using the provided script**:
-    The `set_webhook.py` script uses the `RENDER_SERVICE_NAME` environment variable to construct the full URL and register it.
     ```bash
-    python set_webhook.py
+    python -m venv venv
+    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
     ```
 
-### Twilio (WhatsApp) Webhook
+3.  **Install dependencies:**
 
-1.  Go to your **Twilio Console**.
-2.  Navigate to **Messaging > Senders > WhatsApp Senders**.
-3.  Select your WhatsApp number.
-4.  Find the webhook configuration section. In the field labeled **"WHEN A MESSAGE COMES IN"**, enter your public URL with the `/twilio_webhook` endpoint.
-    -   **URL**: `https://<your-public-url>/twilio_webhook`
-    -   **Method**: `HTTP POST`
-5.  Save your changes.
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Set up environment variables:**
+
+    Create a `.env` file in the root directory and add the following:
+
+    ```env
+    TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
+    LLM_API_KEY="your_llm_api_key"
+    BASE_URL="your_llm_base_url"
+    KITCHEN_CHAT_ID="your_kitchen_chat_id"
+    PAYSTACK_SECRET_KEY="your_paystack_secret_key"
+    TWILIO_ACCOUNT_SID="your_twilio_account_sid"
+    TWILIO_AUTH_TOKEN="your_twilio_auth_token"
+    TWILIO_WHATSAPP_NUMBER="your_twilio_whatsapp_number"
+    ```
+
+### Running the App
+
+1.  **Initialize the database:**
+
+    The database is initialized automatically when the app starts.
+
+2.  **Run the Flask app:**
+
+    ```bash
+    flask run
+    ```
+
+3.  **Set up webhooks:**
+
+    -   **Telegram:** You'll need to set up a webhook to point to your server's `/webhook` endpoint. You can use a tool like `ngrok` for local development.
+
+        ```bash
+        curl -F "url=https://your-domain.com/webhook" https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook
+        ```
+
+    -   **Twilio (WhatsApp):** Configure the webhook URL in your Twilio dashboard to point to `/twilio_webhook`.
+
+    -   **Paystack:** Set the webhook URL in your Paystack dashboard to point to `/verify`.
+
+## Project Structure
+
+```
+.
+├── app.py           # Main Flask application
+├── admin.py         # Admin routes and logic
+├── orders.py        # Database schema and order management
+├── paystack.py      # Paystack integration logic
+├── set_webhook.py   # Script to set the Telegram webhook
+├── requirements.txt # Python dependencies
+├── .env             # Example environment variables
+└── README.md
+```
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request.
