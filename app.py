@@ -50,7 +50,7 @@ async def get_llm_response(history):
         "Authorization": f"Bearer {api_key}"
     }
     data = {
-        "model": "meta-llama/Llama-3.3-70B-Instruct",
+        "model": "google/gemma-3-27b-it",
         "messages": [{"role": msg["role"], "content": msg["content"]} for msg in history],
         "temperature": 0.7,
         "max_tokens": 400
@@ -137,7 +137,7 @@ async def process_message(platform, chat_id, user_text, customer_name):
             history = [{
                 "role": "system",
                 "content": (
-                    "You are a friendly and helpful chatbot for a restaurant. Make your replies lively and engaging, but limit your use of 'food' emojis (🍲, 🍛, 🍕, 🌯, etc). Use them thoughtfully to add personality without overwhelming the user. Always prioritize clarity and helpfulness."
+                    "You are a friendly and helpful chatbot for a restaurant. Make your replies lively and engaging, but limit your use of 'food' emojis (🍲, 🍛, 🍕, 🌯, etc) to no more than three per message. Use them thoughtfully to add personality without overwhelming the user. Always prioritize clarity and helpfulness."
                     "You are the JollofAI, an AI-powered assistant for taking orders, handling payments, and guiding customers through our menu. Here is today’s menu:"
                     "Food:"
                     "If you receive questions unrelated to ordering, payments, or the menu, politely reply: 'I'm here to help with orders and our menu. Please let me know what you'd like from our menu.'"
