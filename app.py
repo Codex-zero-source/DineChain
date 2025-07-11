@@ -37,13 +37,17 @@ TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
 
 async def get_llm_response(history):
     """Calls the IO Intelligence API to get a response."""
-    if not LLM_BASE_URL or not IOINTELLIGENCE_API_KEY:
-        raise ValueError("LLM_BASE_URL and IOINTELLIGENCE_API_KEY must be set in the environment.")
+    # if not LLM_BASE_URL or not IOINTELLIGENCE_API_KEY:
+    #     raise ValueError("LLM_BASE_URL and IOINTELLIGENCE_API_KEY must be set in the environment.")
         
     url = f"{LLM_BASE_URL}/chat/completions"
+    
+    # FOR DEBUGGING ONLY - using the hardcoded key from the successful test
+    api_key = "io-v2-eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJvd25lciI6Ijg4ZDM2MzI4LTUxMjItNGRhMi1iMGJiLTlkNWM1MmU4NDUxOCIsImV4cCI6NDkwNTg0MDI4Nn0.lXlykZCHVen8hDIwOkQPPuVwjnt-SgF3mh7IOunQ_OPpDuJE_NfgOFn7c1mamKnTpmf_rE2j6yiRmyuI6DFt0A"
+
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {IOINTELLIGENCE_API_KEY}"
+        "Authorization": f"Bearer {api_key}"
     }
     data = {
         "model": "meta-llama/Llama-3.3-70B-Instruct",
@@ -192,8 +196,20 @@ async def process_message(platform, chat_id, user_text, customer_name):
 
         history.append({"role": "user", "content": user_text})
 
-        llm_response = await get_llm_response(history)
-        assistant_reply = llm_response['choices'][0]['message']['content'] or ""
+        try:
+            llm_response = await get_llm_response(history)
+            assistant_reply = llm_response['choices'][0]['message']['content'] or ""
+        except httpx.HTTPStatusError as e:
+            error_details = f"Status: {e.response.status_code}, Response: {e.response.text}"
+            log_message = f"LLM API Status Error: {e}. Details: {error_details}"
+            print(log_message, flush=True)
+            await send_user_message(platform, chat_id, "I'm having trouble thinking right now. Please try again in a moment.")
+            return
+        except Exception as e:
+            log_message = f"An unexpected error occurred when calling LLM API. Type: {type(e).__name__}, Error: {e}"
+            print(log_message, flush=True)
+            await send_user_message(platform, chat_id, "I'm having trouble thinking right now. Please try again in a moment.")
+            return
 
         history.append({"role": "assistant", "content": assistant_reply})
 
