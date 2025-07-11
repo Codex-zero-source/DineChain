@@ -127,13 +127,19 @@ async def process_message(platform, chat_id, user_text, customer_name):
                     "• Mocktail: Chapman, Virgin Lime Mojito, Watermelon Mojito, Mint Mojito, Electric Lemonade, Mint Lemonade (₦2,000), Green Goddess, Sunrise, Strawberry Mojito, Bloody Paloma, Fruit Punch, Pina Colada, Pineapple Fizz (₦2,500), Blue Lagoon (₦3,500), Blue Rum Paradise (₦2,500)\n"
                     "• Beer: Heineken, Budweiser, Desperado (Bottle/Can: ₦1,000/₦800), Legend (₦800), Smirnoff Ice (₦1,000), Guinness Stout (₦1,000/₦800), Tiger (₦800), Star Radler (₦700), Goldberg (₦800/₦700), Hero (₦600)\n\n"
                         "Workflow:\n"
-                    "1. Greet the customer and ask for their name for the order.\n"
+                    "1. Greet the customer and ask for their name and email address for the order. Be friendly and explain that the email is for sending their receipt.\n"
                     "2. Offer selections from the menu categories above based on the user's preferences.\n"
                     "3. Guide them to select items, quantities, keep responses short and ask “Home delivery or dine in? If home delivery, please provide your address.”\n"
                     "4. When they finish selecting, ask “Is that everything? Please confirm when you’re done.”\n"
-                    "5. Once confirmed, calculate the total and reply `Total: ₦XXXX`.\n"
-                    "6. Generate a Paystack payment link and send it to the user.\n"
-                    "7. After payment, verify the transaction using the reference. Then:\n"
+                    "5. Once confirmed, provide a clear, final summary of the order. Use the heading 'Your Order:' and list each item with its price. Calculate the total and display it clearly at the end. Finally, include a JSON block with the structured order details. Format it exactly like this, with no extra text after the closing brace:\n"
+                    "```json\n"
+                    "{\n"
+                    "  \"items\": [{\"name\": \"Jollof Rice\", \"price\": 5000}, {\"name\": \"Vanilla Milkshake\", \"price\": 3000}],\n"
+                    "  \"total\": 8000\n"
+                    "}\n"
+                    "```\n"
+                    "6. After presenting the final bill and the JSON, DO NOT mention payment. Simply stop and wait for the system to provide a payment link.\n"
+                    "7. After payment verification, you will be prompted to send a confirmation and notify the kitchen.\n"
                     "   - Send a confirmation message to the customer with a breakdown of their paid order (receipt).\n"
                     "   - Clear the customer session data.\n"
                     "   - Notify the kitchen via the kitchen group chat with a summary of the order.\n"
@@ -165,7 +171,7 @@ async def process_message(platform, chat_id, user_text, customer_name):
             model="meta-llama/Llama-3.3-70B-Instruct",
             messages=[{"role": msg["role"], "content": msg["content"]} for msg in history],  # type: ignore
             temperature=0.7,
-            max_tokens=300
+            max_tokens=400
         )
 
         assistant_reply = response.choices[0].message.content or ""
@@ -178,34 +184,51 @@ async def process_message(platform, chat_id, user_text, customer_name):
         )
         await conn.commit()
 
-        match = re.search(r"total[:\s]*₦?([\d,]+)", assistant_reply, re.IGNORECASE)
-        if match:
-            total_str = match.group(1).replace(",", "")
-            total = int(total_str)
-            order_summary = assistant_reply.split("complete payment")[0].strip()
+        # More robust regex to find the total amount
+        json_match = re.search(r"```json\n(.+?)\n```", assistant_reply, re.DOTALL)
+
+        if json_match:
+            json_str = json_match.group(1)
+            try:
+                order_data = json.loads(json_str)
+                total = order_data["total"]
+                order_summary_json = json.dumps(order_data["items"])
+            except json.JSONDecodeError as e:
+                print(f"Error decoding JSON from AI response: {e}")
+                order_data = None
+        else:
+            order_data = None
+            
+        if order_data:
+            # For now, delivery info is extracted from user's text, this can be improved
             delivery_match = re.search(r"(table\s*number\s*:?.+|home delivery to .+)", user_text, re.IGNORECASE)
             delivery_info = delivery_match.group(0).strip() if delivery_match else "Not provided"
 
-            link, ref = await create_paystack_link("customer@example.com", total, chat_id, order_summary, delivery_info, platform=platform)
+            # Extract email from conversation history
+            email_match = re.search(r"([\w\.-]+@[\w\.-]+)", user_text, re.IGNORECASE)
+            customer_email = email_match.group(1) if email_match else "customer@example.com"
 
-            await cursor.execute(
-                "INSERT INTO orders (chat_id, platform, customer_name, summary, delivery, total, reference) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (chat_id, platform, customer_name, order_summary, delivery_info, total, ref)
-            )
-            await conn.commit()
 
-            assistant_reply += f"\n\nPlease complete payment here: {link}"
+            try:
+                link, ref = await create_paystack_link(customer_email, total, chat_id, order_summary_json, delivery_info, platform=platform)
 
-    await send_user_message(platform, chat_id, assistant_reply)
-    
-    # Check for unpaid orders - This block might be better placed within the DB connection block
-    async with get_db_conn() as conn:
-        cursor = await conn.cursor()
-        await cursor.execute("SELECT * FROM orders WHERE chat_id = ? AND paid = 0", (chat_id,))
-        unpaid_order = await cursor.fetchone()
-        if unpaid_order:
-            await send_user_message(platform, chat_id, "⚠️ You have an unpaid order. Reply with 'add' or 'restart'.")
-            return
+                await cursor.execute(
+                    "INSERT INTO orders (chat_id, platform, customer_name, summary, delivery, total, reference) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (chat_id, platform, customer_name, order_summary_json, delivery_info, total, ref)
+                )
+                await conn.commit()
+
+                # We remove the JSON part from the message to the user
+                user_facing_reply = assistant_reply.split("```json")[0].strip()
+                user_facing_reply += f"\n\nPlease complete payment here: {link}"
+
+            except Exception as e:
+                print(f"Error creating Paystack link: {e}")
+                user_facing_reply = assistant_reply + "\n\nSorry, I couldn't create a payment link at the moment. Please try again later."
+            
+            await send_user_message(platform, chat_id, user_facing_reply)
+        else:
+            await send_user_message(platform, chat_id, assistant_reply)
             
     return "ok", 200
 
@@ -254,13 +277,18 @@ async def verify():
             # Parse items from summary into individual lines
             lines = [f"🍽️ Order for {customer_name or 'N/A'} ({chat_id} on {platform}):"]
             
-            # Ensure summary is a string before processing
-            order_summary = summary or ""
-            for match in re.findall(r"(\*?\s*[\w\s]+)\s*\(₦?([\d,]+)\)", order_summary):
-                item = match[0].strip(" *")
-                price = match[1].replace(",", "")
-                lines.append(f"{item}: ₦{int(price):,}")
-            
+            try:
+                order_items = json.loads(summary)
+                for item in order_items:
+                    lines.append(f"{item['name']}: ₦{int(item['price']):,}")
+            except (json.JSONDecodeError, TypeError):
+                 # Fallback for old order format
+                order_summary = summary or ""
+                for match in re.findall(r"(\*?\s*[\w\s]+)\s*\(₦?([\d,]+)\)", order_summary):
+                    item = match[0].strip(" *")
+                    price = match[1].replace(",", "")
+                    lines.append(f"{item}: ₦{int(price):,}")
+
             lines.append(f"Total: ₦{int(total or 0):,}")
             lines.append(f"Delivery: {delivery or 'Not specified'}")
             return "\n".join(lines)
