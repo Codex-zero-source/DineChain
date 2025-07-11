@@ -138,6 +138,7 @@ async def process_message(platform, chat_id, user_text, customer_name):
                     "   - Clear the customer session data.\n"
                     "   - Notify the kitchen via the kitchen group chat with a summary of the order.\n"
                     "8. If the customer provided a delivery address before payment, include it in the notification to the kitchen.\n"
+                    "Kitchen message format:\n"
                     "   🍽️ Order for <Name> (chat_id) on <platform>:\n"
                     "   Jollof Rice: ₦5,000\n"
                     "   Vanilla Milkshake: ₦3,000\n"
