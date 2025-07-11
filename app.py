@@ -154,7 +154,14 @@ async def process_message(platform, chat_id, user_text, customer_name):
                     "2. Offer selections from the menu categories above based on the user's preferences."
                     "3. Guide them to select items, quantities, keep responses short and ask 'Dine in or home delivery? If home delivery, please provide your address.'"
                     "4. When they finish selecting, ask 'Is that everything? Please confirm when you’re done.'"
-                    "5. Once confirmed, provide a clear, final summary of the order. Use the heading 'Your Order:' and list each item with its price. Calculate the total and display it clearly at the end. Finally, the structured order details, including delivery information if provided. Format it exactly like this, with no extra text after the closing brace:"
+                    "5. Once confirmed, provide a clear, final summary of the order. Use the heading 'Your Order:' and list each item with its price. Calculate the total and display it clearly at the end. Finally, include a JSON block with the structured order details, including delivery information if provided. Format it exactly like this, with no extra text after the closing brace:"
+                    "```json"
+                    "{"
+                    "  \"items\": [{\"name\": \"Jollof Rice\", \"price\": 800}, {\"name\": \"Turkey\", \"price\": 800}],"
+                    "  \"total\": 1600,"
+                    "  \"delivery_info\": \"123 Foodie Lane or Table 7\""
+                    "}"
+                    "```"
                     "6. After presenting the final bill, DO NOT mention payment. Simply stop and wait for the system to provide a payment link."
                     "7. After payment verification, you will be prompted to send a confirmation and notify the kitchen."
                     "   - Send a confirmation message to the customer with a breakdown of their paid order (receipt)."
@@ -167,17 +174,7 @@ async def process_message(platform, chat_id, user_text, customer_name):
                     "   Turkey: ₦800"
                     "   Total: ₦1,600"
                     "   Delivery: Table 15"
-                    "Recommendations:"
-                    "- If unsure, suggest combos dynamically by category and budget."
-                    "- Quick-snack: Shawarma and a Soda."
-                    "- Surprise Me: Jollof Rice with Chicken."
-                    "- Spicy: Egusi Soup with Apu."
-                    "- Sweet: A Doughnut and a Milkshake."
-                    "Format recommendations as:"
-                    "💡 You might enjoy our Pastries: "
-                    "🥧 Meat Pie (₦700)"
-                    "🥧 Sausage Roll (₦500)"
-                    "🥧 Fish Roll (₦500)"
+                    "Recommend a meal if you are unsure of the customer's preferences."
                 )
             }]
 
@@ -208,7 +205,7 @@ async def process_message(platform, chat_id, user_text, customer_name):
         await conn.commit()
 
         # More robust regex to find the total amount
-        json_match = re.search(r"```json\n(.+?)\n```", assistant_reply, re.DOTALL)
+        json_match = re.search(r"```json\s*\n(.+?)\n\s*```", assistant_reply, re.DOTALL)
 
         order_data = None
         if json_match:
@@ -237,7 +234,7 @@ async def process_message(platform, chat_id, user_text, customer_name):
                 )
                 await conn.commit()
 
-                user_facing_reply = assistant_reply.split("```json")[0].strip()
+                user_facing_reply = re.split(r"```json", assistant_reply)[0].strip()
                 user_facing_reply += f"\n\nPlease complete payment here: {link}"
 
             except Exception as e:
