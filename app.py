@@ -157,11 +157,12 @@ async def process_message(platform, chat_id, user_text, customer_name):
                     "2. Offer selections from the menu categories above based on the user's preferences."
                     "3. Guide them to select items, quantities, keep responses short and ask 'Home delivery or dine in? If home delivery, please provide your address.'"
                     "4. When they finish selecting, ask 'Is that everything? Please confirm when you’re done.'"
-                    "5. Once confirmed, provide a clear, final summary of the order. Use the heading 'Your Order:' and list each item with its price. Calculate the total and display it clearly at the end. Finally, include a JSON block with the structured order details. Format it exactly like this, with no extra text after the closing brace:"
+                    "5. Once confirmed, provide a clear, final summary of the order. Use the heading 'Your Order:' and list each item with its price. Calculate the total and display it clearly at the end. Finally, include a JSON block with the structured order details, including delivery information if provided. Format it exactly like this, with no extra text after the closing brace:"
                     "```json"
                     "{"
                     "  \"items\": [{\"name\": \"Jollof Rice\", \"price\": 800}, {\"name\": \"Turkey\", \"price\": 800}],"
-                    "  \"total\": 1600"
+                    "  \"total\": 1600,"
+                    "  \"delivery_info\": \"123 Foodie Lane or Table 7\""
                     "}"
                     "```"
                     "6. After presenting the final bill and the JSON, DO NOT mention payment. Simply stop and wait for the system to provide a payment link."
@@ -236,8 +237,7 @@ async def process_message(platform, chat_id, user_text, customer_name):
             total = order_data.get("total")
             order_summary_json = json.dumps(order_data.get("items", []))
             
-            delivery_match = re.search(r"(table\s*number\s*:?.+|home delivery to .+)", user_text, re.IGNORECASE)
-            delivery_info = delivery_match.group(0).strip() if delivery_match else "Not provided"
+            delivery_info = order_data.get("delivery_info", "Not provided")
 
             email_match = re.search(r"([\w\.-]+@[\w\.-]+)", user_text, re.IGNORECASE)
             customer_email = email_match.group(1) if email_match else "customer@example.com"
