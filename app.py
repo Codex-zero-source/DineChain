@@ -9,10 +9,8 @@ from twilio.twiml.messaging_response import MessagingResponse
 from paystack import create_paystack_link
 from set_webhook import set_webhook
 from admin import admin_bp
-from openai import OpenAI
 from orders import get_db_conn, init_db
 import asyncio
-import openai
 
 load_dotenv()
 app = Flask(__name__)
@@ -27,7 +25,8 @@ asyncio.run(init_db())
 
 # 🔐 Environment
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-LLM_API_KEY = os.getenv("LLM_API_KEY")
+IOINTELLIGENCE_API_KEY = os.getenv("LLM_API_KEY")
+LLM_BASE_URL = os.getenv("BASE_URL")
 KITCHEN_CHAT_ID = os.getenv("KITCHEN_CHAT_ID")
 TELEGRAM_BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
@@ -35,7 +34,29 @@ TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
 
-client = OpenAI(api_key=LLM_API_KEY, base_url=os.getenv("BASE_URL"))
+
+async def get_llm_response(history):
+    """Calls the IO Intelligence API to get a response."""
+    if not LLM_BASE_URL or not IOINTELLIGENCE_API_KEY:
+        raise ValueError("LLM_BASE_URL and IOINTELLIGENCE_API_KEY must be set in the environment.")
+        
+    url = f"{LLM_BASE_URL}/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {IOINTELLIGENCE_API_KEY}"
+    }
+    data = {
+        "model": "meta-llama/Llama-3.3-70B-Instruct",
+        "messages": [{"role": msg["role"], "content": msg["content"]} for msg in history],
+        "temperature": 0.7,
+        "max_tokens": 400
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, headers=headers, json=data, timeout=30.0)
+        response.raise_for_status()  # Will raise an exception for 4xx/5xx responses
+        return response.json()
+
 
 async def send_user_message(platform, chat_id, text):
     if platform == "telegram":
@@ -171,17 +192,17 @@ async def process_message(platform, chat_id, user_text, customer_name):
 
         history.append({"role": "user", "content": user_text})
 
+        assistant_reply = ""
         try:
-            response = client.chat.completions.create(
-                model="meta-llama/Llama-3.3-70B-Instruct",
-                messages=[{"role": msg["role"], "content": msg["content"]} for msg in history],  # type: ignore
-                temperature=0.7,
-                max_tokens=400
-            )
-            assistant_reply = response.choices[0].message.content or ""
-        except openai.APIError as e:
-            error_details = f"Status: {e.status_code}, Response: {e.response.text}" if e.response else "No response details."
-            print(f"OpenAI API Error: {e}. Details: {error_details}")
+            llm_response = await get_llm_response(history)
+            assistant_reply = llm_response['choices'][0]['message']['content'] or ""
+        except httpx.HTTPStatusError as e:
+            error_details = f"Status: {e.response.status_code}, Response: {e.response.text}"
+            print(f"LLM API Status Error: {e}. Details: {error_details}")
+            await send_user_message(platform, chat_id, "I'm having trouble thinking right now. Please try again in a moment.")
+            return
+        except Exception as e:
+            print(f"An unexpected error occurred when calling LLM API: {e}")
             await send_user_message(platform, chat_id, "I'm having trouble thinking right now. Please try again in a moment.")
             return
 
@@ -197,28 +218,26 @@ async def process_message(platform, chat_id, user_text, customer_name):
         # More robust regex to find the total amount
         json_match = re.search(r"```json\n(.+?)\n```", assistant_reply, re.DOTALL)
 
+        order_data = None
         if json_match:
             json_str = json_match.group(1)
             try:
                 order_data = json.loads(json_str)
-                total = order_data["total"]
-                order_summary_json = json.dumps(order_data["items"])
             except json.JSONDecodeError as e:
                 print(f"Error decoding JSON from AI response: {e}")
                 order_data = None
-        else:
-            order_data = None
-            
+        
         if order_data:
-            # For now, delivery info is extracted from user's text, this can be improved
+            total = order_data.get("total")
+            order_summary_json = json.dumps(order_data.get("items", []))
+            
             delivery_match = re.search(r"(table\s*number\s*:?.+|home delivery to .+)", user_text, re.IGNORECASE)
             delivery_info = delivery_match.group(0).strip() if delivery_match else "Not provided"
 
-            # Extract email from conversation history
             email_match = re.search(r"([\w\.-]+@[\w\.-]+)", user_text, re.IGNORECASE)
             customer_email = email_match.group(1) if email_match else "customer@example.com"
 
-
+            user_facing_reply = assistant_reply
             try:
                 link, ref = await create_paystack_link(customer_email, total, chat_id, order_summary_json, delivery_info, platform=platform)
 
@@ -228,7 +247,6 @@ async def process_message(platform, chat_id, user_text, customer_name):
                 )
                 await conn.commit()
 
-                # We remove the JSON part from the message to the user
                 user_facing_reply = assistant_reply.split("```json")[0].strip()
                 user_facing_reply += f"\n\nPlease complete payment here: {link}"
 
@@ -292,7 +310,7 @@ async def verify():
                 for item in order_items:
                     lines.append(f"{item['name']}: ₦{int(item['price']):,}")
             except (json.JSONDecodeError, TypeError):
-                 # Fallback for old order format
+                # Fallback for old order format
                 order_summary = summary or ""
                 for match in re.findall(r"(\*?\s*[\w\s]+)\s*\(₦?([\d,]+)\)", order_summary):
                     item = match[0].strip(" *")
