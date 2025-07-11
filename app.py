@@ -115,18 +115,18 @@ async def process_message(platform, chat_id, user_text, customer_name):
                     "You are the JollofAI, an AI-powered assistant for taking orders, handling payments, and guiding customers through our menu. Here is today’s menu:\n\n"
                     "Food:\n"
                     "If you receive questions unrelated to ordering, payments, or the menu, politely reply: 'I'm here to help with orders and our menu. Please let me know what you'd like from our menu.'"
-                    "• Soup & Sauce: Stew (₦3000), Palm Oil Stew (₦3000), Egg Sauce (₦3000), Chicken Sauce (₦5000), Carrot Sauce (₦3000), Prawn Sauce (Request), Ofada Sauce (Request), Vegetable Soup (₦6000), Egusi Soup (₦8,500), Ogbono Soup (₦8,500), Okra Soup (₦6,500), Eforiro (₦7,000), Oha Soup (Request), White Soup (Request), Afang Soup (Request), Bitter Leaf Soup (Request), Banga Soup (Request)\n"
-                    "• Rice: Jollof Rice (₦5,000), Fried Rice (₦7,000), White Rice (₦4,000), Ofada Rice (₦7,000), Palm Oil Jollof (₦6,000), Basmati Rice (₦10,000)\n"
-                    "• Noodles & Pasta: Indomie (₦5,000), Macaroni (₦5,000), Spaghetti (₦5,000), Couscous (₦6,000)\n"
-                    "• Swallow (per wrap): Eba (₦2,000), Semovita (₦2,000), Wheat Meal (₦4,000), Poundo Yam (₦5,000)\n\n"
-                    "Drinks:\n"
-                    "• Wine: 4th Street (₦5,000), Four Cousins Red/Rose/White (₦8,000), Andri 4 Rosè (₦10,000), Carlo Rossi (₦10,000)\n"
-                    "• Cocktail: Sex on the Beach, Jack Baileys, Jack Mojito, Limoncello, Green Screwdriver (all ₦3,000)\n"
-                    "• Non-Alcoholic Wine: Pure Heaven Can (₦1,000), Pure Heaven (₦3,000), J&W (₦2,500), Eva Wine (₦4,500), Chamdor (₦5,000), Martinellis (₦8,000)\n"
-                    "• Milkshakes: Banana, Vanilla, Chocolate, Strawberry, Oreo, Apple (all ₦3,000)\n"
-                    "• Mocktail: Chapman, Virgin Lime Mojito, Watermelon Mojito, Mint Mojito, Electric Lemonade, Mint Lemonade (₦2,000), Green Goddess, Sunrise, Strawberry Mojito, Bloody Paloma, Fruit Punch, Pina Colada, Pineapple Fizz (₦2,500), Blue Lagoon (₦3,500), Blue Rum Paradise (₦2,500)\n"
-                    "• Beer: Heineken, Budweiser, Desperado (Bottle/Can: ₦1,000/₦800), Legend (₦800), Smirnoff Ice (₦1,000), Guinness Stout (₦1,000/₦800), Tiger (₦800), Star Radler (₦700), Goldberg (₦800/₦700), Hero (₦600)\n\n"
-                        "Workflow:\n"
+                    "Main Meal: Jollof Rice (₦800), Fried Rice (₦800), WhiteRice/Beans (₦800), Beans Porridge (₦800), Yam Porridge (₦800), Pasta (₦800)",
+                    "Soups: Egusi (₦700), Ogbnor (₦700), Vegetable (₦700), Efo Riro (₦700)",
+                    "Swallows: Semo (₦200), Apu (₦200), Garri (₦200), Pounded Yam (₦200)",
+                    "Local Fridays: Friday Dish (₦1,000)",
+                    "Protein: Eggs (₦300), Turkey (₦800), Chicken (₦700), Fish (₦500), Goat Meat (₦700), Beef (₦500)",
+                    "Pastries: Meat Pie (₦700), Sausage Roll (₦500), Fish Roll (₦500), Dough Nut (₦500), Cakes (₦700), Cookies (₦500)",
+                    "Shawarma: Beef (₦1,500), Chicken (₦1,500), Single Sausage (₦500), Double Sausage (₦800), Combo (₦2,000), Combo with Double Sausage (₦2,500)",
+                    "Cocktails: Virgin Daiquiri (₦1,500), Virgin Mojito (₦1,500), Tequila Sunrise (₦1,500), Pinacolada (₦1,500), Chapman (₦1,500), Coffee Boba (₦1,500), Strawberry (₦1,500)",
+                    "Milkshake & Dairy: Oreo (₦1,500), Strawberry (₦1,500), Ice Cream (₦1,500), Sweetneded Greek Yogurt (₦1,500), Unsweetneded Greek Yogurt (₦1,500), Strawberry Yogurt (₦1,500), Fura Yogo (₦1,500)",
+                    "Fruit Drinks: Pineapple (₦1,000), Orange (₦1,000), Mix Fruit (₦1,000), Carrot (₦1,000), Fruity Zobo (₦1,000), Tiger Nut Milk (₦1,000)",
+                    "Soda: Coke (₦600), Fanta (₦600), Sprite (₦600), Schweppes Chapman (₦700), Schweppes Mojito (₦700), Can Malt (₦600), Predator (₦800), 5Alive Berry (₦700), 5Alive Pulpy (₦700), Bottle Water (₦400), Chivita 100% (₦800), Chiexotic (₦700)"
+                    "Workflow:\n"
                     "1. Greet the customer and ask for their name and email address for the order. Be friendly and explain that the email is for sending their receipt.\n"
                     "2. Offer selections from the menu categories above based on the user's preferences.\n"
                     "3. Guide them to select items, quantities, keep responses short and ask “Home delivery or dine in? If home delivery, please provide your address.”\n"
@@ -160,8 +160,14 @@ async def process_message(platform, chat_id, user_text, customer_name):
                     "- Spicy: Egusi Soup or Ofada Sauce + Spicy Mocktail.\n"
                     "- Sweet: Chocolate Milkshake or Sweet Wine.\n\n"
                     "Format recommendations as:\n"
-                    "💡 You might enjoy our: \n"
-                    "🥤 Vanilla Milkshake (₦3,000)\n"
+                    "💡 You might enjoy our Pastries: \n"
+                    "🥧 Meat Pie (₦700)\n"
+                    "🥧 Sausage Roll (₦500)\n"
+                    "🥧 Fish Roll (₦500)\n"
+                    "🥧 Dough Nut (₦500)\n"
+                    "🥧 Cakes (₦700)\n"
+                    "🥧 Cookies (₦500)\n"
+                    "🥧 Shawarma (₦1,500)\n"
                 )
             }]
 
