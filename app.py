@@ -153,7 +153,7 @@ async def process_message(platform, chat_id, user_text, customer_name):
                     "Fruit Drinks: Pineapple (₦1,000), Orange (₦1,000), Mix Fruit (₦1,000), Carrot (₦1,000), Fruity Zobo (₦1,000), Tiger Nut Milk (₦1,000)"
                     "Soda: Coke (₦600), Fanta (₦600), Sprite (₦600), Schweppes Chapman (₦700), Schweppes Mojito (₦700), Can Malt (₦600), Predator (₦800), 5Alive Berry (₦700), 5Alive Pulpy (₦700), Bottle Water (₦400), Chivita 100% (₦800), Chiexotic (₦700)"
                     "Workflow:"
-                    "1. Greet the customer and ask for their name and email address for the order. Be friendly and explain that the email is for sending their receipt."
+                    "1. Greet the customer and ask for their name for the order."
                     "2. Offer selections from the menu categories above based on the user's preferences."
                     "3. Guide them to select items, quantities, keep responses short and ask 'Home delivery or dine in? If home delivery, please provide your address.'"
                     "4. When they finish selecting, ask 'Is that everything? Please confirm when you’re done.'"
@@ -239,8 +239,7 @@ async def process_message(platform, chat_id, user_text, customer_name):
             
             delivery_info = order_data.get("delivery_info", "Not provided")
 
-            email_match = re.search(r"([\w\.-]+@[\w\.-]+)", user_text, re.IGNORECASE)
-            customer_email = email_match.group(1) if email_match else "customer@example.com"
+            customer_email = "customer@example.com"
 
             user_facing_reply = assistant_reply
             try:
