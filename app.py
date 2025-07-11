@@ -180,7 +180,8 @@ async def process_message(platform, chat_id, user_text, customer_name):
             )
             assistant_reply = response.choices[0].message.content or ""
         except openai.APIError as e:
-            print(f"OpenAI API Error: {e}")
+            error_details = f"Status: {e.status_code}, Response: {e.response.text}" if e.response else "No response details."
+            print(f"OpenAI API Error: {e}. Details: {error_details}")
             await send_user_message(platform, chat_id, "I'm having trouble thinking right now. Please try again in a moment.")
             return
 
