@@ -37,20 +37,17 @@ TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
 
 async def get_llm_response(history):
     """Calls the IO Intelligence API to get a response."""
-    # if not LLM_BASE_URL or not IOINTELLIGENCE_API_KEY:
-    #     raise ValueError("LLM_BASE_URL and IOINTELLIGENCE_API_KEY must be set in the environment.")
+    if not LLM_BASE_URL or not IOINTELLIGENCE_API_KEY:
+        raise ValueError("LLM_BASE_URL and IOINTELLIGENCE_API_KEY must be set in the environment.")
         
     url = f"{LLM_BASE_URL}/chat/completions"
     
-    # FOR DEBUGGING ONLY - using the hardcoded key from the successful test
-    api_key = "io-v2-eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJvd25lciI6Ijg4ZDM2MzI4LTUxMjItNGRhMi1iMGJiLTlkNWM1MmU4NDUxOCIsImV4cCI6NDkwNTg0MDI4Nn0.lXlykZCHVen8hDIwOkQPPuVwjnt-SgF3mh7IOunQ_OPpDuJE_NfgOFn7c1mamKnTpmf_rE2j6yiRmyuI6DFt0A"
-
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
+        "Authorization": f"Bearer {IOINTELLIGENCE_API_KEY}"
     }
     data = {
-        "model": "google/gemma-3-27b-it",
+        "model": "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
         "messages": [{"role": msg["role"], "content": msg["content"]} for msg in history],
         "temperature": 0.7,
         "max_tokens": 400
