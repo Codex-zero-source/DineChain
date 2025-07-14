@@ -2,6 +2,7 @@ import os
 import stripe
 import uuid
 import json
+import asyncio
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
@@ -24,7 +25,8 @@ async def create_stripe_checkout_session(email, order_items, chat_id, delivery_i
         })
 
     try:
-        checkout_session = stripe.checkout.Session.create(
+        checkout_session = await asyncio.to_thread(
+            stripe.checkout.Session.create,
             payment_method_types=['card'],
             line_items=line_items,
             mode='payment',
