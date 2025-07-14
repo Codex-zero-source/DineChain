@@ -5,7 +5,7 @@ JollofAI is an AI-powered WhatsApp and Telegram bot that helps customers of a re
 ## Features
 
 - **Conversational Ordering:** Customers can place orders in a natural, conversational way.
-- **Paystack Integration:** Securely process payments using Paystack.
+- **Stripe Integration:** Securely process payments using Stripe.
 - **Telegram & WhatsApp Integration:** Works with both Telegram and WhatsApp.
 - **Order Notifications:** Instantly notifies the kitchen of new orders.
 
@@ -15,7 +15,7 @@ JollofAI is an AI-powered WhatsApp and Telegram bot that helps customers of a re
 
 - Python 3.10+
 - `pip` for package management
-- A Paystack account
+- A Stripe account
 - A Telegram bot token
 - Twilio account for WhatsApp
 
@@ -50,7 +50,8 @@ cd JollofAI
     LLM_API_KEY="your_llm_api_key"
     BASE_URL="your_llm_base_url"
     KITCHEN_CHAT_ID="your_kitchen_chat_id"
-    PAYSTACK_SECRET_KEY="your_paystack_secret_key"
+    STRIPE_SECRET_KEY="your_stripe_secret_key"
+    STRIPE_WEBHOOK_SECRET="your_stripe_webhook_secret"
     TWILIO_ACCOUNT_SID="your_twilio_account_sid"
     TWILIO_AUTH_TOKEN="your_twilio_auth_token"
     TWILIO_WHATSAPP_NUMBER="your_twilio_whatsapp_number"
@@ -78,8 +79,6 @@ cd JollofAI
 
     -   **Twilio (WhatsApp):** Configure the webhook URL in your Twilio dashboard to point to `/twilio_webhook`.
 
-    -   **Paystack:** Set the webhook URL in your Paystack dashboard to point to `/verify`.
-
 ## Project Structure
 
 ```
@@ -87,7 +86,7 @@ cd JollofAI
 ├── app.py           # Main Flask application
 ├── admin.py         # Admin routes and logic
 ├── orders.py        # Database schema and order management
-├── paystack.py      # Paystack integration logic
+├── stripe.py        # Stripe integration logic
 ├── set_webhook.py   # Script to set the Telegram webhook
 ├── requirements.txt # Python dependencies
 ├── .env             # Example environment variables

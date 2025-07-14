@@ -12,8 +12,10 @@ services:
         value: your_telegram_bot_token
       - key: LLM_API_KEY
         value: your_openai_api_key
-      - key: PAYSTACK_SECRET_KEY
-        value: your_paystack_secret_key
+      - key: STRIPE_SECRET_KEY
+        value: your_stripe_secret_key
+      - key: STRIPE_WEBHOOK_SECRET
+        value: your_stripe_webhook_secret
       - key: KITCHEN_CHAT_ID
         value: your_kitchen_telegram_chat_id
       - key: DATABASE_URL
