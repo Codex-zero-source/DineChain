@@ -312,15 +312,15 @@ async def stripe_webhook():
             try:
                 order_items = json.loads(summary)
                 for item in order_items:
-                    lines.append(f"{item['name']}: ₦{int(item['price']):,}")
+                    lines.append(f"{item['name']}: ${float(item['price']):.2f}")
             except (json.JSONDecodeError, TypeError):
                 order_summary = summary or ""
-                for match in re.findall(r"(\*?\s*[\w\s]+)\s*\(₦?([\d,]+)\)", order_summary):
+                for match in re.findall(r"(\*?\s*[\w\s]+)\s*\(\$?([\d,.]+)\)", order_summary):
                     item = match[0].strip(" *")
                     price = match[1].replace(",", "")
-                    lines.append(f"{item}: ₦{int(price):,}")
+                    lines.append(f"{item}: ${float(price):.2f}")
 
-            lines.append(f"Total: ₦{int(total or 0):,}")
+            lines.append(f"Total: ${float(total or 0):.2f}")
             lines.append(f"Delivery: {delivery or 'Not specified'}")
             return "\n".join(lines)
 
