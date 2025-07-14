@@ -7,7 +7,7 @@ import stripe
 from flask import Flask, request
 from dotenv import load_dotenv
 from twilio.twiml.messaging_response import MessagingResponse
-from stripe import create_stripe_checkout_session
+from stripe_utils import create_stripe_checkout_session
 from set_webhook import set_webhook
 from admin import admin_bp
 from orders import get_db_conn, init_db
@@ -36,8 +36,6 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
-
-stripe.api_key = STRIPE_SECRET_KEY
 
 
 async def send_user_message(platform, chat_id, text):
