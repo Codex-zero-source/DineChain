@@ -15,7 +15,7 @@ async def create_stripe_checkout_session(email, order_items, chat_id, delivery_i
     for item in order_items:
         line_items.append({
             'price_data': {
-                'currency': 'ngn',
+                'currency': 'usd',
                 'product_data': {
                     'name': item.get('name', 'Unnamed Item'),
                 },
