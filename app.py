@@ -149,7 +149,7 @@ async def process_llm_response(platform, chat_id, history):
 
 async def handle_order_creation(conn, platform, chat_id, customer_name, assistant_reply):
     # Regex to find JSON, with or without markdown fences
-    json_match = re.search(r"(?:```json\s*)?({.+?})(?:\s*```)?", assistant_reply, re.DOTALL)
+    json_match = re.search(r"({.+})", assistant_reply, re.DOTALL)
 
     if json_match:
         json_str = json_match.group(1)
@@ -210,7 +210,8 @@ async def handle_order_creation(conn, platform, chat_id, customer_name, assistan
                 )
                 await conn.commit()
 
-                user_facing_reply = re.split(r"```json", assistant_reply)[0].strip()
+                # Now that the order is saved, ask for payment
+                user_facing_reply = re.split(r"({.*})", assistant_reply, re.DOTALL)[0].strip()
                 await send_user_message(platform, chat_id, user_facing_reply)
                 return # End execution after creating order
 
