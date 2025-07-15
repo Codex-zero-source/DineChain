@@ -52,22 +52,27 @@ TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
 
 
 # --- System Prompt Construction ---
-def load_menu_from_json(file_path: str = 'menu.json') -> str:
-    """Loads the menu from a JSON file and formats it into a string."""
+def load_menu_from_json(file_path: str = 'menu.json', naira_to_usd: float = 0.0012) -> str:
     try:
         with open(file_path, 'r') as f:
             menu_data = json.load(f)
         
-        menu_string = ""
-        for category, items in menu_data.items():
-            menu_string += f"\n{category.replace('_', ' ').title()}:\n"
-            for item in items:
-                menu_string += f"- {item['name']} (${item['price']:.2f})\n"
-        return menu_string
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"Error loading menu from {file_path}: {e}")
-        # Fallback to a default message if menu is unavailable
-        return "Menu is currently unavailable."
+        menu_string = "Here is the complete food and drinks menu (prices in USD):\n"
+
+        for section, categories in menu_data.items():  # "Food", "Drinks"
+            menu_string += f"\n=== {section.upper()} ===\n"
+            for category, items in categories.items():
+                menu_string += f"\n{category}:\n"
+                for item in items:
+                    name = item["name"]
+                    naira_price = item["price"]
+                    usd_price = round(naira_price * naira_to_usd)
+                    menu_string += f"  - {name} (${usd_price})\n"
+        
+        return menu_string.strip()
+
+    except Exception as e:
+        return f"Error loading or parsing menu: {e}"
 
 def construct_system_prompt() -> str:
     """Constructs the full system prompt for the LLM, including the menu."""
