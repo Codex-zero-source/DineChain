@@ -5,7 +5,7 @@ JollofAI is an AI-powered WhatsApp and Telegram bot that helps customers of a re
 ## Features
 
 - **Conversational Ordering:** Customers can place orders in a natural, conversational way.
-- **Stripe Integration:** Securely process payments using Stripe.
+- **Dual Payment Options:** Securely process payments using Stripe (for cards) or Circle (for USDC crypto).
 - **Telegram & WhatsApp Integration:** Works with both Telegram and WhatsApp.
 - **Order Notifications:** Instantly notifies the kitchen of new orders.
 
@@ -14,10 +14,11 @@ JollofAI is an AI-powered WhatsApp and Telegram bot that helps customers of a re
 ### Prerequisites
 
 - Python 3.10+
-- `pip` for package management
-- A Stripe account
-- A Telegram bot token
-- Twilio account for WhatsApp
+- `pip` for package management.
+- A Telegram bot token.
+- Twilio account for WhatsApp.
+- A Stripe account for card payments.
+- A Circle developer account for USDC payments.
 
 ### Installation
 
@@ -52,6 +53,8 @@ cd JollofAI
     KITCHEN_CHAT_ID="your_kitchen_chat_id"
     STRIPE_SECRET_KEY="your_stripe_secret_key"
     STRIPE_WEBHOOK_SECRET="your_stripe_webhook_secret"
+    CIRCLE_API_KEY="your_circle_api_key"
+    ADMIN_USDC_ADDRESS="your_admin_usdc_address"
     TWILIO_ACCOUNT_SID="your_twilio_account_sid"
     TWILIO_AUTH_TOKEN="your_twilio_auth_token"
     TWILIO_WHATSAPP_NUMBER="your_twilio_whatsapp_number"
@@ -83,13 +86,14 @@ cd JollofAI
 
 ```
 .
-├── app.py           # Main Flask application
-├── admin.py         # Admin routes and logic
-├── orders.py        # Database schema and order management
-├── stripe.py        # Stripe integration logic
-├── set_webhook.py   # Script to set the Telegram webhook
-├── requirements.txt # Python dependencies
-├── .env             # Example environment variables
+├── app.py             # Main Flask application
+├── admin.py           # Admin routes and logic
+├── orders.py          # Database schema and order management
+├── stripe_utils.py    # Stripe integration logic
+├── circle_utils.py    # Circle integration logic
+├── set_webhook.py     # Script to set the Telegram webhook
+├── requirements.txt   # Python dependencies
+├── .env.example       # Example environment variables
 └── README.md
 ```
 

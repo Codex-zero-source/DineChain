@@ -30,6 +30,8 @@ async def init_db():
                     total INTEGER,
                     paid INTEGER DEFAULT 0,
                     reference TEXT,
+                    payment_method TEXT,
+                    deposit_address TEXT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
             """)
@@ -43,6 +45,18 @@ async def init_db():
                     history TEXT,
                     last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(chat_id, platform)
+                );
+            """)
+
+            # Create circle_wallets table
+            await cursor.execute("""
+                CREATE TABLE IF NOT EXISTS circle_wallets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL UNIQUE,
+                    wallet_id TEXT NOT NULL UNIQUE,
+                    chat_id TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
             """)
         

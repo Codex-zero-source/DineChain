@@ -16,6 +16,10 @@ services:
         value: your_stripe_secret_key
       - key: STRIPE_WEBHOOK_SECRET
         value: your_stripe_webhook_secret
+      - key: CIRCLE_API_KEY
+        value: your_circle_api_key
+      - key: ADMIN_USDC_ADDRESS
+        value: your_admin_usdc_address
       - key: KITCHEN_CHAT_ID
         value: your_kitchen_telegram_chat_id
       - key: DATABASE_URL

@@ -4,10 +4,11 @@ import requests
 import re
 import httpx
 import stripe
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 from twilio.twiml.messaging_response import MessagingResponse
 from stripe_utils import create_stripe_checkout_session
+from circle_utils import create_wallet, generate_deposit_address, forward_to_admin
 from set_webhook import set_webhook
 from admin import admin_bp
 from orders import get_db_conn, init_db
@@ -97,19 +98,12 @@ def get_initial_history():
             "2. Offer selections from the menu categories above based on the user's preferences."
             "3. Guide them to select items, quantities, keep responses short and ask 'Dine in or home delivery? If home delivery, please provide your address.'"
             "4. When they finish selecting, ask 'Is that everything? Please confirm when you’re done.'"
-            "5. Once confirmed, provide a clear, final summary of the order. Use the heading 'Your Order:' and list each item with its price. Calculate the total and display it clearly at the end. Finally, include a JSON block with the structured order details, including delivery information if provided. Format it exactly like this, with no extra text after the closing brace:"
-            "```json"
-            "{"
-            "  \"items\": [{\"name\": \"Jollof Rice\", \"price\": 800}, {\"name\": \"Turkey\", \"price\": 800}],"
-            "  \"total\": 1600,"
-            "  \"delivery_info\": \"123 Foodie Lane or Table 7\""
-            "}"
-            "```"
-            "6. After presenting the final bill, DO NOT mention payment. Simply stop and wait for the system to provide a payment link."
-            "7. After payment verification, you will be prompted to send a confirmation and notify the kitchen."
+            "5. Once confirmed, provide a clear, final summary of the order. Use the heading 'Your Order:'. List each item with its price, calculate the total, and then ask 'How would you like to pay? You can pay with Card or Crypto.'"
+            "6. If the user chooses a payment method, respond with ONLY a JSON block like this: {\"payment_choice\": \"crypto\"} or {\"payment_choice\": \"card\"}. Do not include any other text."
+            "7. If the user provided a delivery address before or after payment, include it in the notification to the kitchen."
+            "8. After payment verification, you will be prompted to send a confirmation and notify the kitchen."
             "   - Send a confirmation message to the customer with a breakdown of their paid order (receipt)."
             "   - Notify the kitchen via the kitchen group chat with a summary of the order."
-            "8. If the customer provided a delivery address before or after payment, include it in the notification to the kitchen."
             "9. Clear the customer session data."
             "Kitchen message format:"
             "   🍽️ Order for <Name> (chat_id) on <platform>:"
@@ -154,12 +148,64 @@ async def process_llm_response(platform, chat_id, history):
         return None
 
 async def handle_order_creation(conn, platform, chat_id, customer_name, assistant_reply):
-    json_match = re.search(r"```json\s*\n(.+?)\n\s*```", assistant_reply, re.DOTALL)
-    if not json_match:
+    # First, check for a payment choice response
+    payment_choice_match = re.search(r"```json\s*\n(.+?)\n\s*```", assistant_reply, re.DOTALL)
+    if payment_choice_match:
+        json_str = payment_choice_match.group(1)
+        try:
+            choice_data = json.loads(json_str)
+            payment_method = choice_data.get("payment_choice")
+
+            # Get the last unpaid order for this user
+            cursor = await conn.cursor()
+            await cursor.execute("SELECT * FROM orders WHERE chat_id = ? AND platform = ? AND paid = 0 ORDER BY timestamp DESC LIMIT 1", (chat_id, platform))
+            order = await cursor.fetchone()
+
+            if not order:
+                await send_user_message(platform, chat_id, "I couldn't find your order. Please try again.")
+                return
+
+            if payment_method == "card":
+                order_items = json.loads(order['summary'])
+                customer_email = "customer@example.com" # Placeholder
+                link, ref = await create_stripe_checkout_session(customer_email, order_items, chat_id, order['delivery'], platform)
+                await cursor.execute("UPDATE orders SET payment_method = 'card', reference = ? WHERE id = ?", (ref, order['id']))
+                await conn.commit()
+                await send_user_message(platform, chat_id, f"Please complete your payment here: {link}")
+                return
+
+            elif payment_method == "crypto":
+                # Check if user has a wallet
+                await cursor.execute("SELECT * FROM circle_wallets WHERE chat_id = ? AND platform = ?", (chat_id, platform))
+                wallet = await cursor.fetchone()
+                if not wallet:
+                    user_id, wallet_id = await create_wallet(chat_id)
+                    await cursor.execute("INSERT INTO circle_wallets (user_id, wallet_id, chat_id, platform) VALUES (?, ?, ?, ?)", (user_id, wallet_id, chat_id, platform))
+                    await conn.commit()
+                    user_id_for_address = user_id
+                else:
+                    user_id_for_address = wallet['user_id']
+                
+                deposit_address = await generate_deposit_address(user_id_for_address)
+                await cursor.execute("UPDATE orders SET payment_method = 'crypto', deposit_address = ? WHERE id = ?", (deposit_address, order['id']))
+                await conn.commit()
+
+                amount_usdc = float(order['total'])
+                await send_user_message(platform, chat_id, f"Send ${amount_usdc:.2f} USDC to the address below:\n\n`{deposit_address}`\n\nPayment is on the Polygon (MATIC) network. I will notify you once it's confirmed.")
+                return
+
+        except Exception as e:
+            print(f"Error processing payment choice: {e}")
+            await send_user_message(platform, chat_id, "There was an error processing your payment. Please try again.")
+            return
+
+    # If not a payment choice, check for an order summary
+    order_summary_match = re.search(r"```json\s*\n(.+?)\n\s*```", assistant_reply, re.DOTALL)
+    if not order_summary_match:
         await send_user_message(platform, chat_id, assistant_reply)
         return
 
-    json_str = json_match.group(1)
+    json_str = order_summary_match.group(1)
     try:
         order_data = json.loads(json_str)
     except json.JSONDecodeError as e:
@@ -167,26 +213,22 @@ async def handle_order_creation(conn, platform, chat_id, customer_name, assistan
         await send_user_message(platform, chat_id, assistant_reply)
         return
 
+    # Save the order details to the database before asking for payment method
     total = order_data.get("total")
     order_items = order_data.get("items", [])
     order_summary_json = json.dumps(order_items)
     delivery_info = order_data.get("delivery_info", "Not provided")
-    customer_email = "customer@example.com"
+    
+    cursor = await conn.cursor()
+    await cursor.execute(
+        "INSERT INTO orders (chat_id, platform, customer_name, summary, delivery, total) VALUES (?, ?, ?, ?, ?, ?)",
+        (chat_id, platform, customer_name, order_summary_json, delivery_info, total)
+    )
+    await conn.commit()
 
-    try:
-        link, ref = await create_stripe_checkout_session(customer_email, order_items, chat_id, delivery_info, platform=platform)
-        cursor = await conn.cursor()
-        await cursor.execute(
-            "INSERT INTO orders (chat_id, platform, customer_name, summary, delivery, total, reference) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (chat_id, platform, customer_name, order_summary_json, delivery_info, total, ref)
-        )
-        await conn.commit()
-        user_facing_reply = re.split(r"```json", assistant_reply)[0].strip()
-        user_facing_reply += f"\n\nPlease complete payment here: {link}"
-        await send_user_message(platform, chat_id, user_facing_reply)
-    except Exception as e:
-        print(f"Error creating Stripe checkout session: {e}")
-        await send_user_message(platform, chat_id, assistant_reply + "\n\nSorry, I couldn't create a payment link at the moment. Please try again later.")
+    user_facing_reply = re.split(r"```json", assistant_reply)[0].strip()
+    await send_user_message(platform, chat_id, user_facing_reply)
+
 
 @app.route("/", methods=["GET"])
 def home():
@@ -224,6 +266,24 @@ async def twilio_webhook():
     response = MessagingResponse()
     return str(response)
 
+def format_kitchen_order(chat_id, customer_name, summary, total, delivery, platform):
+    lines = [f"🍽️ Order for {customer_name or 'N/A'} ({chat_id} on {platform}):"]
+    
+    try:
+        order_items = json.loads(summary)
+        for item in order_items:
+            lines.append(f"{item['name']}: ${float(item['price']):.2f}")
+    except (json.JSONDecodeError, TypeError):
+        order_summary = summary or ""
+        for match in re.findall(r"(\*?\s*[\w\s]+)\s*\(\$?([\d,.]+)\)", order_summary):
+            item = match[0].strip(" *")
+            price = match[1].replace(",", "")
+            lines.append(f"{item}: ${float(price):.2f}")
+
+    lines.append(f"Total: ${float(total or 0):.2f}")
+    lines.append(f"Delivery: {delivery or 'Not specified'}")
+    return "\n".join(lines)
+
 async def process_message(platform, chat_id, user_text, customer_name):
     async with get_db_conn() as conn:
         if await handle_unpaid_order(conn, platform, chat_id):
@@ -253,6 +313,58 @@ def success():
 @app.route("/cancel")
 def cancel():
     return "Payment canceled. Your order has not been placed.", 200
+
+@app.route("/circle/webhook", methods=["POST"])
+async def circle_webhook():
+    event = request.json
+    
+    if not event:
+        return jsonify({"status": "error", "message": "Invalid event"}), 400
+
+    # Optional: Verify webhook signature for security
+    # sig_header = request.headers.get("Circle-Signature")
+    # ... verification logic ...
+
+    if event.get("notificationType") == "AddressDeposits":
+        deposit = event.get("deposit")
+        if deposit and deposit.get("status") == "CONFIRMED":
+            address = deposit.get("address")
+            amount_data = deposit.get("amount", {})
+            amount = float(amount_data.get("amount", 0))
+
+            if not address:
+                return jsonify({"status": "error", "message": "Missing address"}), 400
+
+            async with get_db_conn() as conn:
+                cursor = await conn.cursor()
+                await cursor.execute("SELECT * FROM orders WHERE deposit_address = ? AND paid = 0", (address,))
+                order = await cursor.fetchone()
+
+                if order and amount >= float(order['total']):
+                    await cursor.execute("UPDATE orders SET paid = 1 WHERE id = ?", (order['id'],))
+                    await conn.commit()
+
+                    # Notify user and kitchen
+                    await send_user_message(order['platform'], order['chat_id'], f"✅ Payment of ${amount:.2f} USDC confirmed. Your order is now processing!")
+                    
+                    kitchen_order = format_kitchen_order(
+                        order['chat_id'],
+                        order['customer_name'],
+                        order['summary'],
+                        order['total'],
+                        order['delivery'],
+                        order['platform']
+                    )
+                    await send_user_message("telegram", KITCHEN_CHAT_ID, kitchen_order)
+
+                    # Optional: Forward funds to admin
+                    # await cursor.execute("SELECT wallet_id FROM circle_wallets WHERE chat_id = ? AND platform = ?", (order['chat_id'], order['platform']))
+                    # wallet = await cursor.fetchone()
+                    # if wallet:
+                    #     await forward_to_admin(wallet['wallet_id'], amount)
+    
+    return jsonify({"status": "ok"})
+
 
 @app.route("/stripe-webhook", methods=["POST"])
 async def stripe_webhook():
@@ -306,24 +418,6 @@ async def stripe_webhook():
         # Notify user and kitchen
         await send_user_message(platform, chat_id, "✅ Order confirmed! Please wait while we prepare your order")
         
-        def format_kitchen_order(chat_id, customer_name, summary, total, delivery, platform):
-            lines = [f"🍽️ Order for {customer_name or 'N/A'} ({chat_id} on {platform}):"]
-            
-            try:
-                order_items = json.loads(summary)
-                for item in order_items:
-                    lines.append(f"{item['name']}: ${float(item['price']):.2f}")
-            except (json.JSONDecodeError, TypeError):
-                order_summary = summary or ""
-                for match in re.findall(r"(\*?\s*[\w\s]+)\s*\(\$?([\d,.]+)\)", order_summary):
-                    item = match[0].strip(" *")
-                    price = match[1].replace(",", "")
-                    lines.append(f"{item}: ${float(price):.2f}")
-
-            lines.append(f"Total: ${float(total or 0):.2f}")
-            lines.append(f"Delivery: {delivery or 'Not specified'}")
-            return "\n".join(lines)
-
         kitchen_order = format_kitchen_order(
             chat_id, 
             order['customer_name'], 
