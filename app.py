@@ -271,32 +271,32 @@ async def handle_llm_response(conn, platform: str, chat_id: str, customer_name: 
 
 async def process_message(platform: str, chat_id: str, user_text: str, customer_name: str):
     """Main function to process an incoming user message."""
-    async with get_db_conn() as conn:
-        cursor = await conn.cursor()
-        await cursor.execute("SELECT id FROM orders WHERE chat_id = ? AND platform = ? AND paid = 0", (chat_id, platform))
-        unpaid_order = await cursor.fetchone()
+    try:
+        async with get_db_conn() as conn:
+            cursor = await conn.cursor()
+            await cursor.execute("SELECT id FROM orders WHERE chat_id = ? AND platform = ? AND paid = 0", (chat_id, platform))
+            unpaid_order = await cursor.fetchone()
 
-        # State 1: User has an unpaid order and might be selecting a payment method.
-        if unpaid_order:
-            # Keywords to detect payment selection vs. continuing an order
-            payment_keywords = ["pay", "card", "crypto", "cash", "usdc"]
-            if any(keyword in user_text.lower() for keyword in payment_keywords):
-                await _handle_payment_choice(conn, platform, chat_id, user_text)
-                return
+            # State 1: User has an unpaid order and might be selecting a payment method.
+            if unpaid_order:
+                payment_keywords = ["pay", "card", "crypto", "cash", "usdc"]
+                if any(keyword in user_text.lower() for keyword in payment_keywords):
+                    await _handle_payment_choice(conn, platform, chat_id, user_text)
+                    return
 
-        # State 2: Standard conversation flow with the LLM.
-        history = await get_conversation_history(conn, platform, chat_id)
-        history.append({"role": "user", "content": user_text})
+            # State 2: Standard conversation flow with the LLM.
+            history = await get_conversation_history(conn, platform, chat_id)
+            history.append({"role": "user", "content": user_text})
 
-        try:
             assistant_reply = await get_llm_response(history)
             assistant_reply = assistant_reply['choices'][0]['message']['content'] or ""
             history.append({"role": "assistant", "content": assistant_reply})
             await update_conversation_history(conn, platform, chat_id, history)
             await handle_llm_response(conn, platform, chat_id, customer_name, assistant_reply)
-        except Exception as e:
-            print(f"Error processing LLM response for {chat_id}: {e}")
-            await send_user_message(platform, chat_id, "I'm having a little trouble connecting right now. Please try again in a moment.")
+
+    except Exception as e:
+        print(f"Error in process_message for {chat_id}: {e}")
+        await send_user_message(platform, chat_id, "I'm having a little trouble connecting right now. Please try again in a moment.")
 
 # --- Webhook Endpoints & Routes ---
 
