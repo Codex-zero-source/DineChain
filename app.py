@@ -148,86 +148,79 @@ async def process_llm_response(platform, chat_id, history):
         return None
 
 async def handle_order_creation(conn, platform, chat_id, customer_name, assistant_reply):
-    # First, check for a payment choice response
-    payment_choice_match = re.search(r"```json\s*\n(.+?)\n\s*```", assistant_reply, re.DOTALL)
-    if payment_choice_match:
-        json_str = payment_choice_match.group(1)
+    # Regex to find JSON, with or without markdown fences
+    json_match = re.search(r"(?:```json\s*)?({.+?})(?:\s*```)?", assistant_reply, re.DOTALL)
+
+    if json_match:
+        json_str = json_match.group(1)
         try:
-            choice_data = json.loads(json_str)
-            payment_method = choice_data.get("payment_choice")
+            data = json.loads(json_str)
 
-            # Get the last unpaid order for this user
-            cursor = await conn.cursor()
-            await cursor.execute("SELECT * FROM orders WHERE chat_id = ? AND platform = ? AND paid = 0 ORDER BY timestamp DESC LIMIT 1", (chat_id, platform))
-            order = await cursor.fetchone()
-
-            if not order:
-                await send_user_message(platform, chat_id, "I couldn't find your order. Please try again.")
-                return
-
-            if payment_method == "card":
-                order_items = json.loads(order['summary'])
-                customer_email = "customer@example.com" # Placeholder
-                link, ref = await create_stripe_checkout_session(customer_email, order_items, chat_id, order['delivery'], platform)
-                await cursor.execute("UPDATE orders SET payment_method = 'card', reference = ? WHERE id = ?", (ref, order['id']))
-                await conn.commit()
-                await send_user_message(platform, chat_id, f"Please complete your payment here: {link}")
-                return
-
-            elif payment_method == "crypto":
-                # Check if user has a wallet
-                await cursor.execute("SELECT * FROM circle_wallets WHERE chat_id = ? AND platform = ?", (chat_id, platform))
-                wallet = await cursor.fetchone()
-                if not wallet:
-                    user_id, wallet_id = await create_wallet(chat_id)
-                    await cursor.execute("INSERT INTO circle_wallets (user_id, wallet_id, chat_id, platform) VALUES (?, ?, ?, ?)", (user_id, wallet_id, chat_id, platform))
-                    await conn.commit()
-                    user_id_for_address = user_id
-                else:
-                    user_id_for_address = wallet['user_id']
+            # Scenario 1: It's a payment choice
+            if "payment_choice" in data:
+                payment_method = data.get("payment_choice")
                 
-                deposit_address = await generate_deposit_address(user_id_for_address)
-                await cursor.execute("UPDATE orders SET payment_method = 'crypto', deposit_address = ? WHERE id = ?", (deposit_address, order['id']))
+                cursor = await conn.cursor()
+                await cursor.execute("SELECT * FROM orders WHERE chat_id = ? AND platform = ? AND paid = 0 ORDER BY timestamp DESC LIMIT 1", (chat_id, platform))
+                order = await cursor.fetchone()
+
+                if not order:
+                    await send_user_message(platform, chat_id, "I couldn't find your order. Please try again.")
+                    return
+
+                if payment_method == "card":
+                    order_items = json.loads(order['summary'])
+                    customer_email = "customer@example.com" # Placeholder
+                    link, ref = await create_stripe_checkout_session(customer_email, order_items, chat_id, order['delivery'], platform)
+                    await cursor.execute("UPDATE orders SET payment_method = 'card', reference = ? WHERE id = ?", (ref, order['id']))
+                    await conn.commit()
+                    await send_user_message(platform, chat_id, f"Please complete your payment here: {link}")
+                
+                elif payment_method == "crypto":
+                    await cursor.execute("SELECT * FROM circle_wallets WHERE chat_id = ? AND platform = ?", (chat_id, platform))
+                    wallet = await cursor.fetchone()
+                    user_id_for_address = wallet['user_id'] if wallet else None
+                    
+                    if not user_id_for_address:
+                        user_id, wallet_id = await create_wallet(chat_id)
+                        await cursor.execute("INSERT INTO circle_wallets (user_id, wallet_id, chat_id, platform) VALUES (?, ?, ?, ?)", (user_id, wallet_id, chat_id, platform))
+                        await conn.commit()
+                        user_id_for_address = user_id
+
+                    deposit_address = await generate_deposit_address(user_id_for_address)
+                    await cursor.execute("UPDATE orders SET payment_method = 'crypto', deposit_address = ? WHERE id = ?", (deposit_address, order['id']))
+                    await conn.commit()
+
+                    amount_usdc = float(order['total'])
+                    await send_user_message(platform, chat_id, f"Send ${amount_usdc:.2f} USDC to the address below:\n\n`{deposit_address}`\n\nPayment is on the Polygon (MATIC) network. I will notify you once it's confirmed.")
+                
+                return # End execution after handling payment choice
+
+            # Scenario 2: It's an order summary
+            elif "items" in data and "total" in data:
+                total = data.get("total")
+                order_items = data.get("items", [])
+                order_summary_json = json.dumps(order_items)
+                delivery_info = data.get("delivery_info", "Not provided")
+                
+                cursor = await conn.cursor()
+                await cursor.execute(
+                    "INSERT INTO orders (chat_id, platform, customer_name, summary, delivery, total) VALUES (?, ?, ?, ?, ?, ?)",
+                    (chat_id, platform, customer_name, order_summary_json, delivery_info, total)
+                )
                 await conn.commit()
 
-                amount_usdc = float(order['total'])
-                await send_user_message(platform, chat_id, f"Send ${amount_usdc:.2f} USDC to the address below:\n\n`{deposit_address}`\n\nPayment is on the Polygon (MATIC) network. I will notify you once it's confirmed.")
-                return
+                user_facing_reply = re.split(r"```json", assistant_reply)[0].strip()
+                await send_user_message(platform, chat_id, user_facing_reply)
+                return # End execution after creating order
 
-        except Exception as e:
-            print(f"Error processing payment choice: {e}")
-            await send_user_message(platform, chat_id, "There was an error processing your payment. Please try again.")
-            return
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"Error processing JSON response: {e}")
+            # Fall through to send the raw reply if JSON processing fails
+            pass
 
-    # If not a payment choice, check for an order summary
-    order_summary_match = re.search(r"```json\s*\n(.+?)\n\s*```", assistant_reply, re.DOTALL)
-    if not order_summary_match:
-        await send_user_message(platform, chat_id, assistant_reply)
-        return
-
-    json_str = order_summary_match.group(1)
-    try:
-        order_data = json.loads(json_str)
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON from AI response: {e}")
-        await send_user_message(platform, chat_id, assistant_reply)
-        return
-
-    # Save the order details to the database before asking for payment method
-    total = order_data.get("total")
-    order_items = order_data.get("items", [])
-    order_summary_json = json.dumps(order_items)
-    delivery_info = order_data.get("delivery_info", "Not provided")
-    
-    cursor = await conn.cursor()
-    await cursor.execute(
-        "INSERT INTO orders (chat_id, platform, customer_name, summary, delivery, total) VALUES (?, ?, ?, ?, ?, ?)",
-        (chat_id, platform, customer_name, order_summary_json, delivery_info, total)
-    )
-    await conn.commit()
-
-    user_facing_reply = re.split(r"```json", assistant_reply)[0].strip()
-    await send_user_message(platform, chat_id, user_facing_reply)
+    # If no valid JSON is found, just send the assistant's reply
+    await send_user_message(platform, chat_id, assistant_reply)
 
 
 @app.route("/", methods=["GET"])
