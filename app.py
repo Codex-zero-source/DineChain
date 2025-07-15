@@ -111,25 +111,32 @@ def get_initial_history():
 async def send_user_message(platform: str, chat_id: str, text: str):
     """Sends a message to the user on the specified platform."""
     try:
-    if platform == "telegram":
-        async with httpx.AsyncClient() as http_client:
-            url = f"{TELEGRAM_BASE_URL}/sendMessage"
-                payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
-            await http_client.post(url, json=payload)
-    elif platform == "whatsapp":
-        from twilio.rest import Client
-        
-        def send_twilio_message():
-            client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-            client.messages.create(
-                body=text,
-                from_=f"whatsapp:{TWILIO_WHATSAPP_NUMBER}",
-                to=chat_id
-            )
-        
-        await asyncio.to_thread(send_twilio_message)
+        if platform == "telegram":
+            async with httpx.AsyncClient() as http_client:
+                url = f"{TELEGRAM_BASE_URL}/sendMessage"
+                payload = {
+                    "chat_id": chat_id,
+                    "text": text,
+                    "parse_mode": "Markdown"
+                }
+                await http_client.post(url, json=payload)
+
+        elif platform == "whatsapp":
+            from twilio.rest import Client
+
+            def send_twilio_message():
+                client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+                client.messages.create(
+                    body=text,
+                    from_=f"whatsapp:{TWILIO_WHATSAPP_NUMBER}",
+                    to=chat_id
+                )
+
+            await asyncio.to_thread(send_twilio_message)
+
     except Exception as e:
         print(f"Error sending message to {chat_id} on {platform}: {e}")
+
 
 async def get_conversation_history(conn, platform: str, chat_id: str) -> list:
     """Retrieves the conversation history from the database."""
