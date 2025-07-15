@@ -3,26 +3,56 @@ import stripe
 import uuid
 import json
 import asyncio
+from typing import List, Dict, Any, Tuple
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
-async def create_stripe_checkout_session(email, order_items, chat_id, delivery_info, platform="telegram"):
+class StripeException(Exception):
+    """Custom exception for Stripe-related errors."""
+    pass
+
+async def create_stripe_checkout_session(email: str, order_items: List[Dict[str, Any]], chat_id: str, delivery_info: str, platform: str = "telegram") -> Tuple[str, str]:
+    """
+    Creates a Stripe Checkout session.
+    Args:
+        email: The customer's email address.
+        order_items: A list of dictionaries, where each dict represents an item in the order.
+                     Example: [{'name': 'Jollof Rice', 'price_in_cents': 80, 'quantity': 1}]
+        chat_id: The chat ID of the user.
+        delivery_info: Delivery information for the order.
+        platform: The platform the user is on (e.g., 'telegram').
+    Returns:
+        A tuple containing the checkout session URL and the internal reference ID.
+    Raises:
+        StripeException: If there is an error with the Stripe API.
+    """
+    if not stripe.api_key:
+        raise StripeException("Stripe API key is not configured.")
+
+    base_url = os.getenv("BASE_URL", f"https://{os.getenv('RENDER_SERVICE_NAME')}.onrender.com")
+    success_url = f"{base_url}/success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{base_url}/cancel"
     reference = str(uuid.uuid4())
-    success_url = f"https://{os.getenv('RENDER_SERVICE_NAME')}.onrender.com/success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"https://{os.getenv('RENDER_SERVICE_NAME')}.onrender.com/cancel"
 
     line_items = []
     for item in order_items:
+        if not all(k in item for k in ['name', 'price_in_cents', 'quantity']):
+            # Skip invalid items but log the issue
+            print(f"Skipping invalid item in order_items: {item}")
+            continue
         line_items.append({
             'price_data': {
                 'currency': 'usd',
                 'product_data': {
-                    'name': item.get('name', 'Unnamed Item'),
+                    'name': item['name'],
                 },
-                'unit_amount': int(item.get('price', 0) * 100),
+                'unit_amount': item['price_in_cents'],
             },
-            'quantity': item.get('quantity', 1),
+            'quantity': item['quantity'],
         })
+
+    if not line_items:
+        raise StripeException("Cannot create a Stripe session with no valid line items.")
 
     try:
         checkout_session = await asyncio.to_thread(
@@ -36,13 +66,17 @@ async def create_stripe_checkout_session(email, order_items, chat_id, delivery_i
             customer_email=email,
             metadata={
                 "chat_id": chat_id,
-                "order_summary": json.dumps(order_items),
                 "delivery": delivery_info,
                 "platform": platform,
                 "reference": reference
             }
         )
+        if not checkout_session.url:
+            raise StripeException("Stripe session was created, but no URL was returned.")
         return checkout_session.url, reference
+    except stripe.StripeError as e:
+        # Catch specific Stripe errors and re-raise as a custom exception
+        raise StripeException(f"Stripe API error: {e}")
     except Exception as e:
-        # Handle Stripe API errors
-        raise Exception(f"Stripe error: {e}") 
+        # Catch any other unexpected errors
+        raise StripeException(f"An unexpected error occurred during Stripe session creation: {e}") 

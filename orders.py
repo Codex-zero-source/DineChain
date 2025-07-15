@@ -2,7 +2,8 @@ import aiosqlite
 import os
 from contextlib import asynccontextmanager
 
-DATABASE_PATH = os.path.join(os.path.dirname(__file__), 'orders.db')
+# Use DATABASE_PATH from env var, with a fallback to the original 'orders.db'
+DATABASE_PATH = os.getenv('DATABASE_PATH', os.path.join(os.path.dirname(__file__), 'orders.db'))
 
 @asynccontextmanager
 async def get_db_conn():
@@ -27,7 +28,7 @@ async def init_db():
                     platform TEXT,
                     summary TEXT,
                     delivery TEXT,
-                    total INTEGER,
+                    total_in_cents INTEGER,
                     paid INTEGER DEFAULT 0,
                     reference TEXT,
                     payment_method TEXT,
@@ -35,6 +36,9 @@ async def init_db():
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+            await cursor.execute("CREATE INDEX IF NOT EXISTS idx_orders_lookup ON orders (chat_id, platform, paid);")
+            await cursor.execute("CREATE INDEX IF NOT EXISTS idx_orders_reference ON orders (reference);")
+            await cursor.execute("CREATE INDEX IF NOT EXISTS idx_orders_deposit_address ON orders (deposit_address);")
             
             # Create conversations table
             await cursor.execute("""
@@ -47,6 +51,7 @@ async def init_db():
                     UNIQUE(chat_id, platform)
                 );
             """)
+            await cursor.execute("CREATE INDEX IF NOT EXISTS idx_conversations_lookup ON conversations (chat_id, platform);")
 
             # Create circle_wallets table
             await cursor.execute("""
@@ -59,6 +64,7 @@ async def init_db():
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+            await cursor.execute("CREATE INDEX IF NOT EXISTS idx_circle_wallets_lookup ON circle_wallets (chat_id, platform);")
         
             await conn.commit()
     print("✅ Database initialized successfully.")

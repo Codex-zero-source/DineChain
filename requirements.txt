@@ -7,3 +7,6 @@ aiosqlite==0.20.0
 twilio==9.1.0
 stripe==9.2.0
 gunicorn==22.0.0
+pytest
+pytest-asyncio
+asgiref
