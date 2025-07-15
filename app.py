@@ -148,16 +148,21 @@ async def process_llm_response(platform, chat_id, history):
         return None
 
 async def handle_order_creation(conn, platform, chat_id, customer_name, assistant_reply):
+    print(f"--- Handling order creation for {chat_id} ---")
+    print(f"Assistant Reply: {assistant_reply}")
     # Regex to find JSON, with or without markdown fences
     json_match = re.search(r"({.+})", assistant_reply, re.DOTALL)
 
     if json_match:
         json_str = json_match.group(1)
+        print(f"Found JSON string: {json_str}")
         try:
             data = json.loads(json_str)
+            print(f"Parsed JSON data: {data}")
 
             # Scenario 1: It's a payment choice
             if "payment_choice" in data:
+                print("JSON contains 'payment_choice'")
                 payment_method = data.get("payment_choice")
                 
                 cursor = await conn.cursor()
@@ -165,8 +170,11 @@ async def handle_order_creation(conn, platform, chat_id, customer_name, assistan
                 order = await cursor.fetchone()
 
                 if not order:
+                    print("!!! ORDER NOT FOUND IN DB !!!")
                     await send_user_message(platform, chat_id, "I couldn't find your order. Please try again.")
                     return
+
+                print(f"Found unpaid order: {dict(order)}")
 
                 if payment_method == "card":
                     order_items = json.loads(order['summary'])
@@ -177,6 +185,7 @@ async def handle_order_creation(conn, platform, chat_id, customer_name, assistan
                     await send_user_message(platform, chat_id, f"Please complete your payment here: {link}")
                 
                 elif payment_method == "crypto":
+                    print("Handling crypto payment...")
                     await cursor.execute("SELECT * FROM circle_wallets WHERE chat_id = ? AND platform = ?", (chat_id, platform))
                     wallet = await cursor.fetchone()
                     user_id_for_address = wallet['user_id'] if wallet else None
@@ -198,6 +207,7 @@ async def handle_order_creation(conn, platform, chat_id, customer_name, assistan
 
             # Scenario 2: It's an order summary
             elif "items" in data and "total" in data:
+                print("JSON contains 'items' and 'total'. Creating order...")
                 total = data.get("total")
                 order_items = data.get("items", [])
                 order_summary_json = json.dumps(order_items)
@@ -209,9 +219,11 @@ async def handle_order_creation(conn, platform, chat_id, customer_name, assistan
                     (chat_id, platform, customer_name, order_summary_json, delivery_info, total)
                 )
                 await conn.commit()
+                print(f"Order created for chat_id {chat_id}")
 
                 # Now that the order is saved, ask for payment
                 user_facing_reply = re.split(r"({.*})", assistant_reply, re.DOTALL)[0].strip()
+                print(f"Sending user-facing part of reply: {user_facing_reply}")
                 await send_user_message(platform, chat_id, user_facing_reply)
                 return # End execution after creating order
 
@@ -220,7 +232,11 @@ async def handle_order_creation(conn, platform, chat_id, customer_name, assistan
             # Fall through to send the raw reply if JSON processing fails
             pass
 
+    else:
+        print("No JSON found in assistant reply.")
+
     # If no valid JSON is found, just send the assistant's reply
+    print("Sending raw assistant reply to user.")
     await send_user_message(platform, chat_id, assistant_reply)
 
 
@@ -373,7 +389,7 @@ async def stripe_webhook():
     except ValueError as e:
         # Invalid payload
         return "Invalid payload", 400
-    except stripe.error.SignatureVerificationError as e:
+    except stripe.SignatureVerificationError as e:
         # Invalid signature
         return "Invalid signature", 400
 
