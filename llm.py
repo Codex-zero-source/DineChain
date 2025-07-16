@@ -3,7 +3,7 @@ import httpx
 
 async def get_llm_response(history):
     """Calls the IO Intelligence API to get a response."""
-    LLM_BASE_URL = os.getenv("LLM_BASE_URL")
+    LLM_BASE_URL = os.getenv("BASE_URL")
     IOINTELLIGENCE_API_KEY = os.getenv("LLM_API_KEY")
 
     if not LLM_BASE_URL or not IOINTELLIGENCE_API_KEY:
