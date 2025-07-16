@@ -1,13 +1,17 @@
 import os
 import httpx
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 async def get_llm_response(history):
     """Calls the IO Intelligence API to get a response."""
-    LLM_BASE_URL = os.getenv("LLM_BASE_URL")
+    LLM_BASE_URL = os.getenv("BASE_URL")
     IOINTELLIGENCE_API_KEY = os.getenv("LLM_API_KEY")
 
     if not LLM_BASE_URL or not IOINTELLIGENCE_API_KEY:
-        raise ValueError("LLM_BASE_URL and IOINTELLIGENCE_API_KEY must be set in the environment.")
+        logging.error("LLM_BASE_URL and/or IOINTELLIGENCE_API_KEY are not set.")
+        return None # Return None instead of raising an exception
         
     url = f"{LLM_BASE_URL}/chat/completions"
     
@@ -22,7 +26,17 @@ async def get_llm_response(history):
         "max_tokens": 400
     }
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, headers=headers, json=data, timeout=30.0)
-        response.raise_for_status()
-        return response.json() 
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, json=data, timeout=30.0)
+            response.raise_for_status() # Raise an exception for bad status codes
+            return response.json()
+    except httpx.RequestError as e:
+        logging.error(f"Error requesting LLM: {e}")
+        return None
+    except httpx.HTTPStatusError as e:
+        logging.error(f"LLM request failed with status {e.response.status_code}: {e.response.text}")
+        return None
+    except Exception as e:
+        logging.error(f"An unexpected error occurred in get_llm_response: {e}")
+        return None 
