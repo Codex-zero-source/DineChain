@@ -1,94 +1,93 @@
 {
-    "Food": {
-      "Main Meal": [
-        { "name": "Jollof Rice", "price": 800 },
-        { "name": "Fried Rice", "price": 800 },
-        { "name": "WhiteRice/Beans", "price": 800 },
-        { "name": "Beans Porridge", "price": 800 },
-        { "name": "Yam Porridge", "price": 800 },
-        { "name": "Pasta", "price": 800 }
-      ],
-      "Soups": [
-        { "name": "Egusi", "price": 700 },
-        { "name": "Ogbnor", "price": 700 },
-        { "name": "Vegetable", "price": 700 },
-        { "name": "Efo Riro", "price": 700 }
-      ],
-      "Swallows": [
-        { "name": "Semo", "price": 200 },
-        { "name": "Apu", "price": 200 },
-        { "name": "Garri", "price": 200 },
-        { "name": "Pounded Yam", "price": 200 }
-      ],
-      "Local Fridays": [
-        { "name": "Friday Dish", "price": 1000 }
-      ],
-      "Protein": [
-        { "name": "Eggs", "price": 300 },
-        { "name": "Turkey", "price": 800 },
-        { "name": "Chicken", "price": 700 },
-        { "name": "Fish", "price": 500 },
-        { "name": "Goat Meat", "price": 700 },
-        { "name": "Beef", "price": 500 }
-      ],
-      "Pastries": [
-        { "name": "Meat Pie", "price": 700 },
-        { "name": "Sausage Roll", "price": 500 },
-        { "name": "Fish Roll", "price": 500 },
-        { "name": "Dough Nut", "price": 500 },
-        { "name": "Cakes", "price": 700 },
-        { "name": "Cookies", "price": 500 }
-      ]
-    },
-    "Drinks": {
-      "Shawarma": [
-        { "name": "Beef", "price": 1500 },
-        { "name": "Chicken", "price": 1500 },
-        { "name": "Single Sausage", "price": 500 },
-        { "name": "Double Sausage", "price": 800 },
-        { "name": "Combo", "price": 2000 },
-        { "name": "Combo with Double Sausage", "price": 2500 }
-      ],
-      "Cocktails": [
-        { "name": "Virgin Daiquiri", "price": 1500 },
-        { "name": "Virgin Mojito", "price": 1500 },
-        { "name": "Tequila Sunrise", "price": 1500 },
-        { "name": "Pinacolada", "price": 1500 },
-        { "name": "Chapman", "price": 1500 },
-        { "name": "Coffee Boba", "price": 1500 },
-        { "name": "Strawberry", "price": 1500 }
-      ],
-      "Milkshake & Dairy": [
-        { "name": "Oreo", "price": 1500 },
-        { "name": "Strawberry", "price": 1500 },
-        { "name": "Ice Cream", "price": 1500 },
-        { "name": "Sweetneded Greek Yogurt", "price": 1500 },
-        { "name": "Unsweetneded Greek Yogurt", "price": 1500 },
-        { "name": "Strawberry Yogurt", "price": 1500 },
-        { "name": "Fura Yogo", "price": 1500 }
-      ],
-      "Fruit Drinks": [
-        { "name": "Pineapple", "price": 1000 },
-        { "name": "Orange", "price": 1000 },
-        { "name": "Mix Fruit", "price": 1000 },
-        { "name": "Carrot", "price": 1000 },
-        { "name": "Fruity Zobo", "price": 1000 },
-        { "name": "Tiger Nut Milk", "price": 1000 }
-      ],
-      "Soda": [
-        { "name": "Coke", "price": 600 },
-        { "name": "Fanta", "price": 600 },
-        { "name": "Sprite", "price": 600 },
-        { "name": "Schweppes Chapman", "price": 700 },
-        { "name": "Schweppes Mojito", "price": 700 },
-        { "name": "Can Malt", "price": 600 },
-        { "name": "Predator", "price": 800 },
-        { "name": "5Alive Berry", "price": 700 },
-        { "name": "5Alive Pulpy", "price": 700 },
-        { "name": "Bottle Water", "price": 400 },
-        { "name": "Chivita 100%", "price": 800 },
-        { "name": "Chiexotic", "price": 700 }
-      ]
-    }
+  "Food": {
+    "Main Meal": [
+      { "name": "Jollof Rice", "price": 0.96 },
+      { "name": "Fried Rice", "price": 0.96 },
+      { "name": "WhiteRice/Beans", "price": 0.96 },
+      { "name": "Beans Porridge", "price": 0.96 },
+      { "name": "Yam Porridge", "price": 0.96 },
+      { "name": "Pasta", "price": 0.96 }
+    ],
+    "Soups": [
+      { "name": "Egusi", "price": 0.84 },
+      { "name": "Ogbnor", "price": 0.84 },
+      { "name": "Vegetable", "price": 0.84 },
+      { "name": "Efo Riro", "price": 0.84 }
+    ],
+    "Swallows": [
+      { "name": "Semo", "price": 0.24 },
+      { "name": "Apu", "price": 0.24 },
+      { "name": "Garri", "price": 0.24 },
+      { "name": "Pounded Yam", "price": 0.24 }
+    ],
+    "Local Fridays": [
+      { "name": "Friday Dish", "price": 1.20 }
+    ],
+    "Protein": [
+      { "name": "Eggs", "price": 0.36 },
+      { "name": "Turkey", "price": 0.96 },
+      { "name": "Chicken", "price": 0.84 },
+      { "name": "Fish", "price": 0.60 },
+      { "name": "Goat Meat", "price": 0.84 },
+      { "name": "Beef", "price": 0.60 }
+    ],
+    "Pastries": [
+      { "name": "Meat Pie", "price": 0.84 },
+      { "name": "Sausage Roll", "price": 0.60 },
+      { "name": "Fish Roll", "price": 0.60 },
+      { "name": "Dough Nut", "price": 0.60 },
+      { "name": "Cakes", "price": 0.84 },
+      { "name": "Cookies", "price": 0.60 }
+    ]
+  },
+  "Drinks": {
+    "Shawarma": [
+      { "name": "Beef", "price": 1.80 },
+      { "name": "Chicken", "price": 1.80 },
+      { "name": "Single Sausage", "price": 0.60 },
+      { "name": "Double Sausage", "price": 0.96 },
+      { "name": "Combo", "price": 2.40 },
+      { "name": "Combo with Double Sausage", "price": 3.00 }
+    ],
+    "Cocktails": [
+      { "name": "Virgin Daiquiri", "price": 1.80 },
+      { "name": "Virgin Mojito", "price": 1.80 },
+      { "name": "Tequila Sunrise", "price": 1.80 },
+      { "name": "Pinacolada", "price": 1.80 },
+      { "name": "Chapman", "price": 1.80 },
+      { "name": "Coffee Boba", "price": 1.80 },
+      { "name": "Strawberry", "price": 1.80 }
+    ],
+    "Milkshake & Dairy": [
+      { "name": "Oreo", "price": 1.80 },
+      { "name": "Strawberry", "price": 1.80 },
+      { "name": "Ice Cream", "price": 1.80 },
+      { "name": "Sweetneded Greek Yogurt", "price": 1.80 },
+      { "name": "Unsweetneded Greek Yogurt", "price": 1.80 },
+      { "name": "Strawberry Yogurt", "price": 1.80 },
+      { "name": "Fura Yogo", "price": 1.80 }
+    ],
+    "Fruit Drinks": [
+      { "name": "Pineapple", "price": 1.20 },
+      { "name": "Orange", "price": 1.20 },
+      { "name": "Mix Fruit", "price": 1.20 },
+      { "name": "Carrot", "price": 1.20 },
+      { "name": "Fruity Zobo", "price": 1.20 },
+      { "name": "Tiger Nut Milk", "price": 1.20 }
+    ],
+    "Soda": [
+      { "name": "Coke", "price": 0.72 },
+      { "name": "Fanta", "price": 0.72 },
+      { "name": "Sprite", "price": 0.72 },
+      { "name": "Schweppes Chapman", "price": 0.84 },
+      { "name": "Schweppes Mojito", "price": 0.84 },
+      { "name": "Can Malt", "price": 0.72 },
+      { "name": "Predator", "price": 0.96 },
+      { "name": "5Alive Berry", "price": 0.84 },
+      { "name": "5Alive Pulpy", "price": 0.84 },
+      { "name": "Bottle Water", "price": 0.48 },
+      { "name": "Chivita 100%", "price": 0.96 },
+      { "name": "Chiexotic", "price": 0.84 }
+    ]
   }
-  
+}
