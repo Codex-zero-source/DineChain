@@ -7,11 +7,13 @@ import stripe
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 from twilio.twiml.messaging_response import MessagingResponse
+from sqlalchemy.future import select
+from contextlib import asynccontextmanager
 
 from stripe_utils import create_stripe_checkout_session, StripeException
-from circle_utils import create_wallet, generate_deposit_address, forward_to_admin, CircleException
+from circle_utils import create_wallet, generate_deposit_address, CircleException
 from admin import admin_bp
-from orders import get_db_conn, init_db
+from orders import get_db_conn, init_db, Order, Conversation, CircleWallet
 from llm import get_llm_response
 
 import asyncio
@@ -52,7 +54,7 @@ TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
 
 
 # --- System Prompt Construction ---
-def load_menu_from_json(file_path: str = 'menu.json', naira_to_usd: float = 0.0012) -> str:
+def load_menu_from_json(file_path: str = 'menu.json') -> str:
     try:
         with open(file_path, 'r') as f:
             menu_data = json.load(f)
@@ -65,9 +67,8 @@ def load_menu_from_json(file_path: str = 'menu.json', naira_to_usd: float = 0.00
                 menu_string += f"\n{category}:\n"
                 for item in items:
                     name = item["name"]
-                    naira_price = item["price"]
-                    usd_price = round(naira_price * naira_to_usd)
-                    menu_string += f"  - {name} (${usd_price})\n"
+                    usd_price = item["price"]
+                    menu_string += f"  - {name} (${usd_price:.2f})\n"
         
         return menu_string.strip()
 
@@ -143,29 +144,38 @@ async def send_user_message(platform: str, chat_id: str, text: str):
         print(f"Error sending message to {chat_id} on {platform}: {e}")
 
 
-async def get_conversation_history(conn, platform: str, chat_id: str) -> list:
+async def get_conversation_history(session, platform: str, chat_id: str) -> list:
     """Retrieves the conversation history from the database."""
-    cursor = await conn.cursor()
-    await cursor.execute("SELECT history FROM conversations WHERE chat_id = ? AND platform = ?", (chat_id, platform))
-    result = await cursor.fetchone()
-    if result and result['history']:
-        return json.loads(result['history'])
+    result = await session.execute(
+        select(Conversation).filter_by(chat_id=chat_id, platform=platform)
+    )
+    conversation = result.scalar_one_or_none()
+    if conversation and conversation.history:
+        return json.loads(conversation.history)
     return get_initial_history()
 
-async def update_conversation_history(conn, platform: str, chat_id: str, history: list):
+async def update_conversation_history(session, platform: str, chat_id: str, history: list):
     """Updates the conversation history in the database."""
-    cursor = await conn.cursor()
-    await cursor.execute(
-        "INSERT INTO conversations (chat_id, platform, history) VALUES (?, ?, ?) ON CONFLICT(chat_id, platform) DO UPDATE SET history = excluded.history",
-        (chat_id, platform, json.dumps(history))
+    result = await session.execute(
+        select(Conversation).filter_by(chat_id=chat_id, platform=platform)
     )
-    await conn.commit()
+    conversation = result.scalar_one_or_none()
+    if conversation:
+        conversation.history = json.dumps(history)
+    else:
+        conversation = Conversation(chat_id=chat_id, platform=platform, history=json.dumps(history))
+        session.add(conversation)
+    await session.commit()
     
-async def clear_conversation_history(conn, platform: str, chat_id: str):
+async def clear_conversation_history(session, platform: str, chat_id: str):
     """Clears a user's conversation history after a successful order."""
-    cursor = await conn.cursor()
-    await cursor.execute("UPDATE conversations SET history = NULL WHERE chat_id = ? AND platform = ?", (chat_id, platform))
-    await conn.commit()
+    result = await session.execute(
+        select(Conversation).filter_by(chat_id=chat_id, platform=platform)
+    )
+    conversation = result.scalar_one_or_none()
+    if conversation:
+        conversation.history = None
+        await session.commit()
 
 # --- Core Order & Payment Logic ---
 
@@ -179,64 +189,76 @@ def _parse_llm_json_response(assistant_reply: str) -> dict | None:
     except json.JSONDecodeError:
         return None
 
-async def _create_order_in_db(conn, platform: str, chat_id: str, customer_name: str, order_data: dict):
+async def _create_order_in_db(session, platform: str, chat_id: str, customer_name: str, order_data: dict):
     """Creates a new order record in the database."""
     total_cents = order_data.get("total_in_cents")
     order_items = order_data.get("items", [])
     delivery_info = order_data.get("delivery_info", "Not provided")
     
-    cursor = await conn.cursor()
-    await cursor.execute(
-        "INSERT INTO orders (chat_id, platform, customer_name, summary, delivery, total_in_cents) VALUES (?, ?, ?, ?, ?, ?)",
-        (chat_id, platform, customer_name, json.dumps(order_items), delivery_info, total_cents)
+    new_order = Order(
+        chat_id=chat_id,
+        platform=platform,
+        customer_name=customer_name,
+        summary=json.dumps(order_items),
+        delivery=delivery_info,
+        total=total_cents
     )
-    await conn.commit()
+    session.add(new_order)
+    await session.commit()
+    
     print(f"Order created for chat_id {chat_id}")
     await send_user_message(platform, chat_id, "Your order is confirmed! How would you like to pay? (Card / Crypto)")
 
-async def _generate_stripe_payment(conn, platform: str, chat_id: str, order: aiosqlite.Row):
+async def _generate_stripe_payment(session, platform: str, chat_id: str, order: Order):
     """Generates a Stripe payment link for an order."""
     try:
-        order_items = json.loads(order['summary'])
+        order_items = json.loads(order.summary) if order.summary else []
         customer_email = "customer@example.com" # Placeholder
-        link, ref = await create_stripe_checkout_session(customer_email, order_items, chat_id, order['delivery'], platform)
+        link, ref = await create_stripe_checkout_session(customer_email, order_items, chat_id, order.delivery or "", platform)
         
-        cursor = await conn.cursor()
-        await cursor.execute("UPDATE orders SET payment_method = 'card', reference = ? WHERE id = ?", (ref, order['id']))
-        await conn.commit()
+        order.payment_method = 'card'
+        order.reference = ref
+        await session.commit()
         await send_user_message(platform, chat_id, f"Please complete your payment here: {link}")
     except StripeException as e:
         print(f"Stripe error for {chat_id}: {e}")
         await send_user_message(platform, chat_id, "Sorry, I couldn't create a card payment link right now. Please try again or choose another method.")
 
-async def _generate_crypto_payment(conn, platform: str, chat_id: str, order: aiosqlite.Row):
+async def _generate_crypto_payment(session, platform: str, chat_id: str, order: Order):
     """Generates a Circle USDC payment address for an order."""
     try:
-        cursor = await conn.cursor()
-        await cursor.execute("SELECT * FROM circle_wallets WHERE chat_id = ? AND platform = ?", (chat_id, platform))
-        wallet = await cursor.fetchone()
+        result = await session.execute(
+            select(CircleWallet).filter_by(chat_id=chat_id, platform=platform)
+        )
+        wallet = result.scalar_one_or_none()
         
         if not wallet:
             user_id, wallet_id = await create_wallet(chat_id)
-            await cursor.execute("INSERT INTO circle_wallets (user_id, wallet_id, chat_id, platform) VALUES (?, ?, ?, ?)", (user_id, wallet_id, chat_id, platform))
-            await conn.commit()
-            wallet = {"user_id": user_id}
+            wallet = CircleWallet(user_id=user_id, wallet_id=wallet_id, chat_id=chat_id, platform=platform)
+            session.add(wallet)
+            await session.commit()
 
-        deposit_address = await generate_deposit_address(wallet['user_id'])
-        await cursor.execute("UPDATE orders SET payment_method = 'crypto', deposit_address = ? WHERE id = ?", (deposit_address, order['id']))
-        await conn.commit()
+        if wallet.wallet_id:
+            deposit_address = await generate_deposit_address(wallet.wallet_id)
+            order.payment_method = 'crypto'
+            order.deposit_address = deposit_address
+            await session.commit()
 
-        amount_usd = float(order['total_in_cents']) / 100
-        await send_user_message(platform, chat_id, f"Please send `${amount_usd:.2f}` USDC to the address below (Polygon network):\n\n`{deposit_address}`\n\nI'll notify you once payment is confirmed.")
+            if order.total is not None:
+                amount_usd = float(order.total) / 100
+                await send_user_message(platform, chat_id, f"Please send `${amount_usd:.2f}` USDC to the address below (Polygon network):\n\n`{deposit_address}`\n\nI'll notify you once payment is confirmed.")
+            else:
+                await send_user_message(platform, chat_id, f"Please send USDC to the address below (Polygon network):\n\n`{deposit_address}`\n\nI'll notify you once payment is confirmed.")
     except CircleException as e:
         print(f"Circle error for {chat_id}: {e}")
         await send_user_message(platform, chat_id, "Sorry, I couldn't generate a crypto payment address right now. Please try again or choose another method.")
 
-async def _handle_payment_choice(conn, platform: str, chat_id: str, user_text: str):
+async def _handle_payment_choice(session, platform: str, chat_id: str, user_text: str):
     """Handles the user's payment method selection."""
-    cursor = await conn.cursor()
-    await cursor.execute("SELECT * FROM orders WHERE chat_id = ? AND platform = ? AND paid = 0 ORDER BY timestamp DESC LIMIT 1", (chat_id, platform))
-    order = await cursor.fetchone()
+    result = await session.execute(
+        select(Order).filter_by(chat_id=chat_id, platform=platform, paid=False).order_by(Order.timestamp.desc())
+    )
+    order = result.scalar_one_or_none()
 
     if not order:
         await send_user_message(platform, chat_id, "I couldn't find an order to pay for. Let's create one first!")
@@ -244,20 +266,20 @@ async def _handle_payment_choice(conn, platform: str, chat_id: str, user_text: s
 
     choice = user_text.lower().strip()
     if "card" in choice:
-        await _generate_stripe_payment(conn, platform, chat_id, order)
+        await _generate_stripe_payment(session, platform, chat_id, order)
     elif "crypto" in choice:
-        await _generate_crypto_payment(conn, platform, chat_id, order)
+        await _generate_crypto_payment(session, platform, chat_id, order)
     else:
         await send_user_message(platform, chat_id, "Please choose a valid payment method: Card or Crypto.")
 
-async def handle_llm_response(conn, platform: str, chat_id: str, customer_name: str, assistant_reply: str):
+async def handle_llm_response(session, platform: str, chat_id: str, customer_name: str, assistant_reply: str):
     """Processes the LLM's response, routing to the correct logic."""
     data = _parse_llm_json_response(assistant_reply)
 
     if data and isinstance(data, dict):
         action = data.get("action")
         if action == "confirm_order":
-            await _create_order_in_db(conn, platform, chat_id, customer_name, data.get("data", {}))
+            await _create_order_in_db(session, platform, chat_id, customer_name, data.get("data", {}))
         elif action == "present_payment_options":
             await send_user_message(platform, chat_id, "How would you like to pay? (Card / Crypto)")
         else:
@@ -271,32 +293,38 @@ async def handle_llm_response(conn, platform: str, chat_id: str, customer_name: 
 
 async def process_message(platform: str, chat_id: str, user_text: str, customer_name: str):
     """Main function to process an incoming user message."""
-    try:
-        async with get_db_conn() as conn:
-            cursor = await conn.cursor()
-            await cursor.execute("SELECT id FROM orders WHERE chat_id = ? AND platform = ? AND paid = 0", (chat_id, platform))
-            unpaid_order = await cursor.fetchone()
+    assert chat_id, "chat_id cannot be None or empty"
+    async with get_db_conn() as session:
+        try:
+            result = await session.execute(
+                select(Order.id).filter_by(chat_id=chat_id, platform=platform, paid=False)
+            )
+            unpaid_order = result.scalar_one_or_none()
 
             # State 1: User has an unpaid order and might be selecting a payment method.
             if unpaid_order:
                 payment_keywords = ["pay", "card", "crypto", "cash", "usdc"]
                 if any(keyword in user_text.lower() for keyword in payment_keywords):
-                    await _handle_payment_choice(conn, platform, chat_id, user_text)
+                    await _handle_payment_choice(session, platform, chat_id, user_text)
                     return
 
             # State 2: Standard conversation flow with the LLM.
-            history = await get_conversation_history(conn, platform, chat_id)
+            history = await get_conversation_history(session, platform, chat_id)
             history.append({"role": "user", "content": user_text})
 
-            assistant_reply = await get_llm_response(history)
-            assistant_reply = assistant_reply['choices'][0]['message']['content'] or ""
-            history.append({"role": "assistant", "content": assistant_reply})
-            await update_conversation_history(conn, platform, chat_id, history)
-            await handle_llm_response(conn, platform, chat_id, customer_name, assistant_reply)
+            llm_response = await get_llm_response(history)
+            if not llm_response:
+                 raise Exception("LLM call failed") # Or handle more gracefully
 
-    except Exception as e:
-        print(f"Error in process_message for {chat_id}: {e}")
-        await send_user_message(platform, chat_id, "I'm having a little trouble connecting right now. Please try again in a moment.")
+            assistant_reply = llm_response['choices'][0]['message']['content'] or ""
+            history.append({"role": "assistant", "content": assistant_reply})
+            await update_conversation_history(session, platform, chat_id, history)
+            await handle_llm_response(session, platform, chat_id, customer_name, assistant_reply)
+
+        except Exception as e:
+            print(f"Error in process_message for {chat_id}: {e}")
+            if chat_id:
+                await send_user_message(platform, chat_id, "I'm having a little trouble connecting right now. Please try again in a moment.")
 
 # --- Webhook Endpoints & Routes ---
 
@@ -339,22 +367,24 @@ async def stripe_webhook():
             print(f"Stripe event missing data: ref={ref}, chat_id={chat_id}, platform={platform}")
             return "Missing required data in webhook", 400
 
-        async with get_db_conn() as conn:
-            cursor = await conn.cursor()
-            await cursor.execute("SELECT * FROM orders WHERE reference = ? AND paid = 0", (ref,))
-            order = await cursor.fetchone()
+        async with get_db_conn() as session:
+            result = await session.execute(select(Order).filter_by(reference=ref, paid=False))
+            order = result.scalar_one_or_none()
 
             if order:
-                await cursor.execute("UPDATE orders SET paid = 1 WHERE id = ?", (order['id'],))
-                await clear_conversation_history(conn, platform, chat_id)
-                await conn.commit()
+                order.paid = True
+                if chat_id and platform:
+                    await clear_conversation_history(session, platform, chat_id)
+                await session.commit()
 
-                await send_user_message(platform, chat_id, "✅ Payment successful! Your order is being prepared.")
-                kitchen_order = format_kitchen_order(
-                    chat_id, order['customer_name'], order['summary'],
-                    order['total_in_cents'], order['delivery'], platform
-                )
-                await send_user_message("telegram", KITCHEN_CHAT_ID, kitchen_order)
+                if chat_id:
+                    await send_user_message(platform, chat_id, "✅ Payment successful! Your order is being prepared.")
+                if order.customer_name and order.summary and order.total is not None and order.delivery and platform:
+                    kitchen_order = format_kitchen_order(
+                        chat_id, order.customer_name, order.summary,
+                        order.total, order.delivery, platform
+                    )
+                    await send_user_message("telegram", KITCHEN_CHAT_ID, kitchen_order)
             else:
                 print(f"Warning: Received Stripe event for already paid or unknown reference: {ref}")
 
@@ -378,33 +408,37 @@ async def circle_webhook():
     if not address:
         return "Missing address", 400
 
-    async with get_db_conn() as conn:
-        cursor = await conn.cursor()
-        await cursor.execute("SELECT * FROM orders WHERE deposit_address = ? AND paid = 0", (address,))
-        order = await cursor.fetchone()
+    async with get_db_conn() as session:
+        result = await session.execute(select(Order).filter_by(deposit_address=address, paid=False))
+        order = result.scalar_one_or_none()
 
         if order:
-            chat_id = order['chat_id']
-            platform = order['platform']
+            chat_id = order.chat_id
+            platform = order.platform
             if not all([chat_id, platform]):
-                print(f"CRITICAL: Order {order['id']} is missing chat_id or platform.")
+                print(f"CRITICAL: Order {order.id} is missing chat_id or platform.")
                 return "Internal error: order missing key data", 500
 
             # Circle amount is a float string, e.g., "15.25". Order total is in cents.
-            amount_required_dollars = (order['total_in_cents'] or 0) / 100.0
-            if amount_received >= amount_required_dollars:
-                await cursor.execute("UPDATE orders SET paid = 1 WHERE id = ?", (order['id'],))
-                await clear_conversation_history(conn, platform, chat_id)
-                await conn.commit()
+            if order.total is not None:
+                amount_required_dollars = (order.total or 0) / 100.0
+                if amount_received >= amount_required_dollars:
+                    order.paid = True
+                    await clear_conversation_history(session, platform, chat_id)
+                    await session.commit()
 
-                await send_user_message(platform, chat_id, f"✅ Payment of ${amount_received:.2f} USDC confirmed. Your order is now processing!")
-                kitchen_order = format_kitchen_order(
-                    chat_id, order['customer_name'], order['summary'],
-                    order['total_in_cents'], order['delivery'], platform
-                )
-                await send_user_message("telegram", KITCHEN_CHAT_ID, kitchen_order)
+                    if chat_id:
+                        await send_user_message(platform, chat_id, f"✅ Payment of ${amount_received:.2f} USDC confirmed. Your order is now processing!")
+                    if order.customer_name and order.summary and order.total is not None and order.delivery and platform:
+                        kitchen_order = format_kitchen_order(
+                            chat_id, order.customer_name, order.summary,
+                            order.total, order.delivery, platform
+                        )
+                        await send_user_message("telegram", KITCHEN_CHAT_ID, kitchen_order)
+                else:
+                    print(f"Partial payment received for order {order.id}. Required: {amount_required_dollars}, Received: {amount_received}")
             else:
-                 print(f"Partial payment received for order {order['id']}. Required: {amount_required_dollars}, Received: {amount_received}")
+                print(f"Warning: Received Circle deposit for order with no total amount: {order.id}")
         else:
             print(f"Warning: Received Circle deposit for unknown or paid address: {address}")
 
@@ -434,11 +468,11 @@ async def webhook():
 async def twilio_webhook():
     data = request.form
     user_text = data.get('Body', '').strip()
-    chat_id = data.get('From', '')
+    chat_id = data.get('From', 'unknown_whatsapp_user')
     customer_name = data.get('ProfileName', 'Valued Customer')
     platform = "whatsapp"
     
-    if not user_text:
+    if not user_text or not chat_id:
         return str(MessagingResponse())
 
     await process_message(platform, chat_id, user_text, customer_name)

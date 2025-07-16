@@ -1,74 +1,57 @@
-import aiosqlite
 import os
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import Column, Integer, String, Text, Boolean, Float, BigInteger, UniqueConstraint
+import asyncio
 from contextlib import asynccontextmanager
 
-# Use DATABASE_PATH from env var, with a fallback to the original 'orders.db'
-DATABASE_PATH = os.getenv('DATABASE_PATH', os.path.join(os.path.dirname(__file__), 'orders.db'))
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set")
+
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+
+engine = create_async_engine(DATABASE_URL, echo=True)
+AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+Base = declarative_base()
+
+class Order(Base):
+    __tablename__ = 'orders'
+    id = Column(Integer, primary_key=True)
+    chat_id = Column(String)
+    platform = Column(String)
+    customer_name = Column(String)
+    summary = Column(Text)
+    delivery = Column(Text)
+    total = Column(Integer)
+    paid = Column(Boolean, default=False)
+    payment_method = Column(String)
+    reference = Column(String, unique=True)
+    deposit_address = Column(String)
+    timestamp = Column(BigInteger)
+
+class Conversation(Base):
+    __tablename__ = 'conversations'
+    id = Column(Integer, primary_key=True)
+    chat_id = Column(String)
+    platform = Column(String)
+    history = Column(Text)
+    __table_args__ = (UniqueConstraint('chat_id', 'platform', name='_chat_platform_uc'),)
+
+class CircleWallet(Base):
+    __tablename__ = 'circle_wallets'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String, unique=True)
+    wallet_id = Column(String, unique=True)
+    chat_id = Column(String)
+    platform = Column(String)
+
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 @asynccontextmanager
 async def get_db_conn():
-    """Establishes a connection to the SQLite database as a context manager."""
-    conn = await aiosqlite.connect(DATABASE_PATH)
-    conn.row_factory = aiosqlite.Row
-    try:
-        yield conn
-    finally:
-        await conn.close()
-
-async def init_db():
-    """Initializes the database and creates tables if they don't exist."""
-    async with get_db_conn() as conn:
-        async with conn.cursor() as cursor:
-            # Create orders table
-            await cursor.execute("""
-                CREATE TABLE IF NOT EXISTS orders (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    chat_id TEXT NOT NULL,
-                    customer_name TEXT,
-                    platform TEXT,
-                    summary TEXT,
-                    delivery TEXT,
-                    total_in_cents INTEGER,
-                    paid INTEGER DEFAULT 0,
-                    reference TEXT,
-                    payment_method TEXT,
-                    deposit_address TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-            await cursor.execute("CREATE INDEX IF NOT EXISTS idx_orders_lookup ON orders (chat_id, platform, paid);")
-            await cursor.execute("CREATE INDEX IF NOT EXISTS idx_orders_reference ON orders (reference);")
-            await cursor.execute("CREATE INDEX IF NOT EXISTS idx_orders_deposit_address ON orders (deposit_address);")
-            
-            # Create conversations table
-            await cursor.execute("""
-                CREATE TABLE IF NOT EXISTS conversations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    chat_id TEXT NOT NULL,
-                    platform TEXT,
-                    history TEXT,
-                    last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(chat_id, platform)
-                );
-            """)
-            await cursor.execute("CREATE INDEX IF NOT EXISTS idx_conversations_lookup ON conversations (chat_id, platform);")
-
-            # Create circle_wallets table
-            await cursor.execute("""
-                CREATE TABLE IF NOT EXISTS circle_wallets (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT NOT NULL UNIQUE,
-                    wallet_id TEXT NOT NULL UNIQUE,
-                    chat_id TEXT NOT NULL,
-                    platform TEXT NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-            await cursor.execute("CREATE INDEX IF NOT EXISTS idx_circle_wallets_lookup ON circle_wallets (chat_id, platform);")
-        
-            await conn.commit()
-    print("✅ Database initialized successfully.")
-
-if __name__ == '__main__':
-    import asyncio
-    asyncio.run(init_db())
+    async with AsyncSessionLocal() as session:
+        yield session
