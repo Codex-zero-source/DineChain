@@ -7,7 +7,7 @@ async def get_llm_response(history):
     IOINTELLIGENCE_API_KEY = os.getenv("LLM_API_KEY")
 
     if not LLM_BASE_URL or not IOINTELLIGENCE_API_KEY:
-        raise ValueError("LLM_BASE_URL and IOINTELLIGENCE_API_KEY must be set in the environment.")
+        raise ValueError("BASE_URL and LLM_API_KEY must be set in the environment.")
         
     url = f"{LLM_BASE_URL}/chat/completions"
     
