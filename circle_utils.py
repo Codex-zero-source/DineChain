@@ -20,15 +20,16 @@ async def _post(path: str, payload: dict):
     return r.json()
 
 async def create_wallet(chat_id: str):
-    """Create a new wallet and return its ID."""
+    """Create customer wallet. Returns the walletId."""
     payload = {
         "idempotencyKey": str(uuid.uuid4()),
         "description": f"wallet-{chat_id}"
     }
     data = await _post("/v1/wallets", payload)
-    # Circle returns the wallet ID under data.id
-    wallet_id = data["data"]["id"]
+    # Circle sandbox returns walletId here:
+    wallet_id = data["data"]["walletId"]
     return wallet_id
+
 
 async def generate_deposit_address(wallet_id: str):
     """Generate a USDC deposit address on Polygon for the given wallet."""
