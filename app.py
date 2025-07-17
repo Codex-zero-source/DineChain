@@ -57,7 +57,7 @@ async def send_user_message(platform, chat_id, text):
             )
         
         await asyncio.to_thread(send_twilio_message)
-
+'''
 async def handle_unpaid_order(conn, platform, chat_id):
     cursor = await conn.cursor()
     await cursor.execute("SELECT * FROM orders WHERE chat_id = ? AND platform = ? AND paid = 0", (chat_id, platform))
@@ -66,7 +66,7 @@ async def handle_unpaid_order(conn, platform, chat_id):
         await send_user_message(platform, chat_id, "⚠️ You have an unpaid order. Reply with 'add' or 'restart'.")
         return True
     return False
-
+'''
 async def get_conversation_history(conn, platform, chat_id):
     cursor = await conn.cursor()
     await cursor.execute("SELECT history FROM conversations WHERE chat_id = ? AND platform = ?", (chat_id, platform))
