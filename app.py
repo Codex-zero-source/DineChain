@@ -270,10 +270,23 @@ async def twilio_webhook():
 
 async def process_message(platform, chat_id, user_text, customer_name):
     async with get_db_conn() as conn:
-        '''
-        if await handle_unpaid_order(conn, platform, chat_id):
+        # 1️⃣ Check: Is there a pending unpaid order?
+        unpaid = await conn.execute(
+            "SELECT 1 FROM orders WHERE chat_id = ? AND platform = ? AND paid = 0 ORDER BY timestamp DESC LIMIT 1",
+            (chat_id, platform)
+        )
+        if await unpaid.fetchone():
+            # If user text indicates payment choice, dispatch to handler
+            if user_text.lower() in ("card", "crypto"):
+                await _handle_payment_choice(conn, platform, chat_id, user_text)
+                return
+            # Otherwise, prompt them to choose
+            await send_user_message(platform, chat_id,
+                "You have an unpaid order. Please reply 'Card' to pay by card or 'Crypto' to pay with USDC."
+            )
             return
-        '''
+
+        # 2️⃣ No unpaid order? Continue to normal LLM flow…
         history = await get_conversation_history(conn, platform, chat_id)
         if not history:
             history = get_initial_history()
