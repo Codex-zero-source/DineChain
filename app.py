@@ -270,9 +270,10 @@ async def twilio_webhook():
 
 async def process_message(platform, chat_id, user_text, customer_name):
     async with get_db_conn() as conn:
+        '''
         if await handle_unpaid_order(conn, platform, chat_id):
             return
-
+        '''
         history = await get_conversation_history(conn, platform, chat_id)
         if not history:
             history = get_initial_history()
