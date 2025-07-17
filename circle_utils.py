@@ -1,7 +1,10 @@
-import os, httpx, uuid
+import os
+import httpx
+import uuid
 
 CIRCLE_API_KEY = os.getenv("CIRCLE_API_KEY")
 CIRCLE_API_URL = os.getenv("CIRCLE_API_URL", "https://api-sandbox.circle.com")
+
 HEADERS = {
     "Authorization": f"Bearer {CIRCLE_API_KEY}",
     "Content-Type": "application/json"
@@ -13,31 +16,51 @@ class CircleException(Exception):
 async def _post(path: str, payload: dict):
     if not CIRCLE_API_KEY:
         raise CircleException("CIRCLE_API_KEY not set")
-    async with httpx.AsyncClient() as client:
-        r = await client.post(f"{CIRCLE_API_URL}{path}", json=payload, headers=HEADERS, timeout=15)
-    if r.status_code >= 300:
-        raise CircleException(f"Circle API error {r.status_code}: {r.text}")
-    return r.json()
 
-async def create_wallet(chat_id: str):
-    """Create customer wallet. Returns the walletId."""
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.post(f"{CIRCLE_API_URL}{path}", json=payload, headers=HEADERS)
+        if response.status_code >= 300:
+            raise CircleException(f"Circle API error {response.status_code}: {response.text}")
+        return response.json()
+
+async def _get(path: str):
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.get(f"{CIRCLE_API_URL}{path}", headers=HEADERS)
+        if response.status_code >= 300:
+            raise CircleException(f"Circle API GET error {response.status_code}: {response.text}")
+        return response.json()
+
+async def create_or_get_wallet(ref_id: str) -> str:
+    """
+    Create a Circle developer wallet, or return an existing walletId if it already exists for this refId.
+    """
+    try:
+        # Check for existing wallet
+        res = await _get("/v1/w3s/developer/wallets")
+        for wallet in res.get("data", []):
+            if wallet.get("entitySecretCipherText") == ref_id:  # Not official usage, replace if Circle adds refId filter
+                return wallet.get("id")
+
+        # If not found, create new wallet
+        payload = {
+            "idempotencyKey": str(uuid.uuid4()),
+            "blockchains": ["MATIC-MUMBAI"],
+            "custodyType": "DEVELOPER",
+            "entitySecretCipherText": ref_id
+        }
+        data = await _post("/v1/w3s/developer/wallets", payload)
+        return data["data"]["id"]
+
+    except Exception as e:
+        raise CircleException(f"Failed to create or retrieve wallet: {e}")
+
+async def generate_deposit_address(wallet_id: str) -> str:
+    """
+    Create a deposit address on Polygon (MATIC-MUMBAI) chain for given wallet.
+    """
     payload = {
         "idempotencyKey": str(uuid.uuid4()),
-        "description": f"wallet-{chat_id}"
+        "blockchain": "MATIC-MUMBAI"
     }
-    data = await _post("/v1/wallets", payload)
-    # Circle sandbox returns walletId here:
-    wallet_id = data["data"]["walletId"]
-    return wallet_id
-
-
-async def generate_deposit_address(wallet_id: str):
-    """Generate a USDC deposit address on Polygon for the given wallet."""
-    payload = {
-        "idempotencyKey": str(uuid.uuid4()),
-        "currency": "USD",        # must specify currency
-        "chain": "POLYGON"
-    }
-    data = await _post(f"/v1/wallets/{wallet_id}/addresses", payload)
-    # Circle returns the address under data.address
+    data = await _post(f"/v1/w3s/developer/wallets/{wallet_id}/addresses", payload)
     return data["data"]["address"]
