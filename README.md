@@ -79,6 +79,23 @@ cd JollofAI
 
     -   **Twilio (WhatsApp):** Configure the webhook URL in your Twilio dashboard to point to `/twilio_webhook`.
 
+## 🪙 Crypto Payments (USDC via Circle)
+
+Set the following environment variables (see `env.example`):
+
+| Variable | Description |
+|----------|-------------|
+| `CIRCLE_API_KEY` | Circle sandbox / prod API key |
+| `CIRCLE_API_URL` | `https://api-sandbox.circle.com` for testing |
+| `CIRCLE_ADMIN_WALLET` | Wallet ID that ultimately receives funds |
+
+Flow:
+1. After order confirmation bot asks **Card / Crypto**.
+2. If **Crypto** selected it creates a Circle customer wallet and deposit address, replies with USDC amount & address (Polygon).
+3. When Circle webhook `AddressDeposits` reports `CONFIRMED`, order is marked paid, user & kitchen notified.
+
+> For production switch `CIRCLE_API_URL` to Circle mainnet endpoint and update your webhook URL in Circle console to `https://your-domain/circle/webhook`.
+
 ## Project Structure
 
 ```
