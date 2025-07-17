@@ -8,7 +8,12 @@ from flask import Flask, request
 from dotenv import load_dotenv
 from twilio.twiml.messaging_response import MessagingResponse
 from stripe_utils import create_stripe_checkout_session
-from circle_utils import create_or_get_wallet, generate_deposit_address, CircleException
+from circle_utils import (
+    generate_entity_secret_ciphertext,
+    create_wallet,
+    generate_deposit_address,
+    CircleException,
+)
 from set_webhook import set_webhook
 from admin import admin_bp
 from orders import get_db_conn, init_db
@@ -197,9 +202,13 @@ async def _generate_crypto_payment(conn, platform: str, chat_id: str, order):
         if row and row['deposit_address']:
             deposit_address = row['deposit_address']
         else:
-            wallet_id = await create_or_get_wallet(chat_id)
+            ciphertext = generate_entity_secret_ciphertext()
+            wallet_id = await create_wallet(ciphertext)
             deposit_address = await generate_deposit_address(wallet_id)
-            await cursor.execute("UPDATE orders SET payment_method = 'crypto', deposit_address = ? WHERE id = ?", (deposit_address, order['id']))
+            await cursor.execute(
+                "UPDATE orders SET payment_method = 'crypto', deposit_address = ? WHERE id = ?",
+                (deposit_address, order['id']),
+            )
             await conn.commit()
 
         amount_usd = (order['total'] or 0) / 100
@@ -325,7 +334,7 @@ async def stripe_webhook():
     except ValueError as e:
         # Invalid payload
         return "Invalid payload", 400
-    except stripe.error.SignatureVerificationError as e:
+    except stripe.error.SignatureVerificationError as e:  # type: ignore[attr-defined]
         # Invalid signature
         return "Invalid signature", 400
 
