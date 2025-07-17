@@ -197,7 +197,7 @@ async def _generate_crypto_payment(conn, platform: str, chat_id: str, order):
         if row and row['deposit_address']:
             deposit_address = row['deposit_address']
         else:
-            user_id, wallet_id = await create_wallet(chat_id)
+            wallet_id = await create_wallet(chat_id)
             deposit_address = await generate_deposit_address(wallet_id)
             await cursor.execute("UPDATE orders SET payment_method = 'crypto', deposit_address = ? WHERE id = ?", (deposit_address, order['id']))
             await conn.commit()
