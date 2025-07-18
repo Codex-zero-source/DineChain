@@ -6,8 +6,7 @@ import asyncio
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
-async def create_stripe_checkout_session(email, order_items, chat_id, delivery_info, platform="telegram"):
-    reference = str(uuid.uuid4())
+async def create_stripe_checkout_session(order_id, email, order_items, chat_id, delivery_info, platform="telegram"):
     success_url = f"{os.getenv('APP_URL')}/success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{os.getenv('APP_URL')}/cancel"
 
@@ -32,17 +31,15 @@ async def create_stripe_checkout_session(email, order_items, chat_id, delivery_i
             mode='payment',
             success_url=success_url,
             cancel_url=cancel_url,
-            client_reference_id=reference,
             customer_email=email,
             metadata={
+                "order_id": order_id,
                 "chat_id": chat_id,
-                "order_summary": json.dumps(order_items),
                 "delivery": delivery_info,
                 "platform": platform,
-                "reference": reference
             }
         )
-        return checkout_session.url, reference
+        return checkout_session.url, checkout_session.id
     except Exception as e:
         # Handle Stripe API errors
         raise Exception(f"Stripe error: {e}") 

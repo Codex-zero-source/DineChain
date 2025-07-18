@@ -226,7 +226,7 @@ async def _handle_payment_choice(conn, platform, chat_id, user_text):
     if "card" in user_text.lower():
         order_items = json.loads(order['summary']) if order['summary'] else []
         customer_email = "customer@example.com"
-        link, ref = await create_stripe_checkout_session(customer_email, order_items, chat_id, order['delivery'], platform=platform)
+        link, ref = await create_stripe_checkout_session(order['id'], customer_email, order_items, chat_id, order['delivery'], platform=platform)
         await cursor.execute("UPDATE orders SET payment_method = 'card', reference = ? WHERE id = ?", (ref, order['id']))
         await conn.commit()
         await send_user_message(platform, chat_id, f"Please complete your payment here: {link}")
@@ -362,20 +362,25 @@ async def stripe_webhook():
 
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
-        reference = session['id']
+        metadata = session.get("metadata", {})
+        order_id = metadata.get("order_id")
+
+        if not order_id:
+            return "Webhook received without order_id", 400
         
         async with get_db_conn() as conn:
             cursor = await conn.cursor()
-            await cursor.execute("UPDATE orders SET paid = 1 WHERE reference = ?", (reference,))
+            # We use order_id directly, which is reliable
+            await cursor.execute("UPDATE orders SET paid = 1 WHERE id = ?", (int(order_id),))
             await conn.commit()
             
-            await cursor.execute("SELECT * FROM orders WHERE reference = ?", (reference,))
+            await cursor.execute("SELECT * FROM orders WHERE id = ?", (int(order_id),))
             order = await cursor.fetchone()
 
         if order:
             await _notify_user_and_kitchen(order)
         else:
-            print(f"Error: Could not find order with reference {reference} after payment.")
+            print(f"Error: Could not find order with ID {order_id} after payment.")
 
     return "Webhook processed", 200
 
