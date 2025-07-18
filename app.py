@@ -29,7 +29,7 @@ asyncio.run(init_db())
 # 🔐 Environment
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 IOINTELLIGENCE_API_KEY = os.getenv("LLM_API_KEY")
-LLM_BASE_URL = os.getenv("BASE_URL")
+LLM_BASE_URL = "https://api.intelligence.io.solutions/api/v1"
 KITCHEN_CHAT_ID = os.getenv("KITCHEN_CHAT_ID")
 TELEGRAM_BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
