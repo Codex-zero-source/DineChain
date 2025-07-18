@@ -8,13 +8,15 @@ from flask import Flask, request
 from dotenv import load_dotenv
 from twilio.twiml.messaging_response import MessagingResponse
 from stripe_utils import create_stripe_checkout_session
-from crypto_payment import generate_wallet
+from crypto_payment import generate_wallet, get_usdt_balance
 from set_webhook import set_webhook
 from admin import admin_bp
 from orders import get_db_conn, init_db
 from llm import get_llm_response
 import asyncio
 from stripe.error import SignatureVerificationError
+import threading
+import time
 
 load_dotenv()
 app = Flask(__name__)
@@ -395,5 +397,62 @@ async def internal_order_paid_webhook(order_id):
     else:
         return "Order not found", 404
 
+def payment_watcher_thread():
+    """A background thread that periodically checks for crypto payments."""
+    print("🤖 Starting payment watcher thread...")
+    
+    # Create a new event loop for this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    async def check_payments():
+        while True:
+            try:
+                async with get_db_conn() as conn:
+                    cursor = await conn.cursor()
+                    await cursor.execute(
+                        "SELECT id, deposit_address, total FROM orders WHERE paid = 0 AND payment_method = 'crypto' AND deposit_address IS NOT NULL"
+                    )
+                    unpaid_orders = await cursor.fetchall()
+                    unpaid_orders_list = list(unpaid_orders)
+
+                if unpaid_orders_list:
+                    print(f"🔎 Found {len(unpaid_orders_list)} unpaid crypto order(s). Checking balances...")
+                    for order in unpaid_orders_list:
+                        order_id = order['id']
+                        address = order['deposit_address']
+                        amount_expected = order['total'] / 100
+
+                        try:
+                            balance = get_usdt_balance(address)
+                            if balance >= amount_expected:
+                                print(f"💰 Payment detected for order {order_id}!")
+                                async with get_db_conn() as conn_update:
+                                    cursor_update = await conn_update.cursor()
+                                    await cursor_update.execute("UPDATE orders SET paid = 1 WHERE id = ?", (order_id,))
+                                    await conn_update.commit()
+                                
+                                # Notify the main app
+                                headers = {"Authorization": f"Bearer {INTERNAL_API_KEY}"}
+                                url = f"{os.getenv('APP_URL')}/internal/order_paid/{order_id}"
+                                async with httpx.AsyncClient() as client:
+                                    await client.post(url, headers=headers)
+
+                        except Exception as e:
+                            print(f"⚠️ Error checking balance for order {order_id}: {e}")
+            except Exception as e:
+                print(f"🚨 An unexpected error occurred in the payment watcher: {e}")
+            
+            time.sleep(30) # Poll every 30 seconds
+
+    loop.run_until_complete(check_payments())
+
+# Start the payment watcher in a background thread
+# This runs when Gunicorn imports the file
+if os.getenv("WERKZEUG_RUN_MAIN") != "true":
+    watcher_thread = threading.Thread(target=payment_watcher_thread, daemon=True)
+    watcher_thread.start()
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # The reloader will run this twice, so the check above prevents two threads
+    app.run(debug=True)

@@ -9,21 +9,11 @@ services:
     envVars:
       - fromGroup: app-secrets
 
-  # A background worker for the payment watcher service
-  - type: worker
-    name: payment-watcher
-    env: python
-    plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python payment_watcher.py
-    envVars:
-      - fromGroup: app-secrets
-
 # Environment variable group for secrets
 envVarGroups:
   - name: app-secrets
     envVars:
-      - key: BASE_URL
+      - key: LLM_BASE_URL
         value: https://api.intelligence.io.solutions/api/v1
       - key: APP_URL
         value: # The public URL of your web service, e.g., https://jollof-ai.onrender.com

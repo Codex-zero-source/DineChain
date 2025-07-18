@@ -65,19 +65,13 @@ cd JollofAI
 
 2.  **Run the Flask app:**
 
+    The application now includes the payment watcher, which runs automatically in a background thread.
+
     ```bash
     flask run
     ```
 
-3.  **Run the Payment Watcher (in a separate terminal):**
-
-    The payment watcher is a separate service that monitors the blockchain for incoming crypto payments.
-
-    ```bash
-    python payment_watcher.py
-    ```
-
-4.  **Set up webhooks:**
+3.  **Set up webhooks:**
 
     -   **Telegram:** You'll need to set up a webhook to point to your server's `/webhook` endpoint. You can use a tool like `ngrok` for local development.
 
@@ -108,12 +102,11 @@ Flow:
 
 ```
 .
-├── app.py           # Main Flask application
+├── app.py           # Main Flask application with integrated payment watcher
 ├── admin.py         # Admin routes and logic
 ├── orders.py        # Database schema and order management
 ├── stripe.py        # Stripe integration logic
 ├── crypto_payment.py # Crypto payment logic
-├── payment_watcher.py # Service to monitor crypto payments
 ├── set_webhook.py   # Script to set the Telegram webhook
 ├── requirements.txt # Python dependencies
 ├── .env.example     # Example environment variables
