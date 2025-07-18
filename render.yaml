@@ -9,11 +9,21 @@ services:
     envVars:
       - fromGroup: app-secrets
 
+  # A background worker for the payment watcher service
+  - type: worker
+    name: payment-watcher
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python payment_watcher.py
+    envVars:
+      - fromGroup: app-secrets
+
 # Environment variable group for secrets
 envVarGroups:
   - name: app-secrets
     envVars:
-      - key: LLM_BASE_URL
+      - key: BASE_URL
         value: https://api.intelligence.io.solutions/api/v1
       - key: APP_URL
         value: # The public URL of your web service, e.g., https://jollof-ai.onrender.com
@@ -35,7 +45,7 @@ envVarGroups:
         value:
       - key: FUJI_RPC_URL
         value: https://api.avax-test.network/ext/bc/C/rpc
-      - key: USDT_TOKEN_ADDRESS
-        value: 0xfab46e002bbf0b4509813474841e0716e6730136
+      - key: USDC_TOKEN_ADDRESS
+        value: 0x5425890298aed601595a70AB815c96711a31B68a
       - key: INTERNAL_API_KEY
         value: # Generate a secure, random string here

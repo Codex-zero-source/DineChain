@@ -8,7 +8,7 @@ from flask import Flask, request
 from dotenv import load_dotenv
 from twilio.twiml.messaging_response import MessagingResponse
 from stripe_utils import create_stripe_checkout_session
-from crypto_payment import generate_wallet, get_usdt_balance
+from crypto_payment import generate_wallet, get_usdc_balance
 from set_webhook import set_webhook
 from admin import admin_bp
 from orders import get_db_conn, init_db
@@ -209,7 +209,7 @@ async def _generate_crypto_payment(conn, platform: str, chat_id: str, order):
 
         amount_usd = (order['total'] or 0) / 100
         msg = (
-            f"Please send `${amount_usd:.2f}` USDT to the address below (Fuji).\n\n"
+            f"Please send `${amount_usd:.2f}` USDC to the address below (Fuji).\n\n"
             f"`{address}`\n\nI'll let you know once payment is confirmed."
         )
         await send_user_message(platform, chat_id, msg)
@@ -431,7 +431,7 @@ def payment_watcher_thread():
                         amount_expected = order['total'] / 100
 
                         try:
-                            balance = get_usdt_balance(address)
+                            balance = get_usdc_balance(address)
                             if balance >= amount_expected:
                                 print(f"💰 Payment detected for order {order_id}!")
                                 async with get_db_conn() as conn_update:
