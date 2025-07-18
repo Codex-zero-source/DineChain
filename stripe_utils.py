@@ -8,8 +8,8 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 async def create_stripe_checkout_session(email, order_items, chat_id, delivery_info, platform="telegram"):
     reference = str(uuid.uuid4())
-    success_url = f"https://{os.getenv('RENDER_SERVICE_NAME')}.onrender.com/success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"https://{os.getenv('RENDER_SERVICE_NAME')}.onrender.com/cancel"
+    success_url = f"{os.getenv('APP_URL')}/success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{os.getenv('APP_URL')}/cancel"
 
     line_items = []
     for item in order_items:
