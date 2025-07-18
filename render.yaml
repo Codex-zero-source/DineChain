@@ -24,6 +24,8 @@ envVarGroups:
   - name: app-secrets
     envVars:
       - key: BASE_URL
+        value: https://api.intelligence.io.solutions/api/v1
+      - key: APP_URL
         value: # The public URL of your web service, e.g., https://jollof-ai.onrender.com
       - key: TELEGRAM_BOT_TOKEN
         value:

@@ -13,7 +13,7 @@ from crypto_payment import get_usdt_balance
 # --- Configuration ---
 DATABASE_PATH = os.path.join(os.path.dirname(__file__), 'orders.db')
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
-BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:5000")
+APP_URL = os.getenv("APP_URL", "http://127.0.0.1:5000")
 POLL_INTERVAL_SEC = 30  # Poll every 30 seconds
 
 async def get_unpaid_crypto_orders(conn):
@@ -35,7 +35,7 @@ async def mark_order_as_paid(conn, order_id):
 async def notify_app(order_id):
     """Calls the internal webhook in the main app to trigger user/kitchen notifications."""
     headers = {"Authorization": f"Bearer {INTERNAL_API_KEY}"}
-    url = f"{BASE_URL}/internal/order_paid/{order_id}"
+    url = f"{APP_URL}/internal/order_paid/{order_id}"
     
     async with httpx.AsyncClient() as client:
         try:
