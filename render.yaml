@@ -1,6 +1,7 @@
 services:
+  # A web service for the main Flask application
   - type: web
-    name: restaurant-bot
+    name: jollof-ai
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -8,15 +9,45 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11
+      - fromGroup: app-secrets
+
+  # A background worker for the payment watcher service
+  - type: worker
+    name: payment-watcher
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python payment_watcher.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+      - fromGroup: app-secrets
+
+# Environment variable group for secrets
+envVarGroups:
+  - name: app-secrets
+    envVars:
+      - key: BASE_URL
+        value: # The public URL of your web service, e.g., https://jollof-ai.onrender.com
       - key: TELEGRAM_BOT_TOKEN
-        value: your_telegram_bot_token
+        value:
       - key: LLM_API_KEY
-        value: your_openai_api_key
-      - key: STRIPE_SECRET_KEY
-        value: your_stripe_secret_key
-      - key: STRIPE_WEBHOOK_SECRET
-        value: your_stripe_webhook_secret
+        value:
       - key: KITCHEN_CHAT_ID
-        value: your_kitchen_telegram_chat_id
-      - key: DATABASE_URL
-        value: your_postgres_database_url
+        value:
+      - key: STRIPE_SECRET_KEY
+        value:
+      - key: STRIPE_WEBHOOK_SECRET
+        value:
+      - key: TWILIO_ACCOUNT_SID
+        value:
+      - key: TWILIO_AUTH_TOKEN
+        value:
+      - key: TWILIO_WHATSAPP_NUMBER
+        value:
+      - key: FUJI_RPC_URL
+        value: https://api.avax-test.network/ext/bc/C/rpc
+      - key: USDT_TOKEN_ADDRESS
+        value: 0xfab46e002bbf0b4509813474841e0716e6730136
+      - key: INTERNAL_API_KEY
+        value: # Generate a secure, random string here

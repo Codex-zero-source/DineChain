@@ -7,5 +7,5 @@ aiosqlite==0.20.0
 twilio==9.1.0
 stripe==9.2.0
 gunicorn==22.0.0
-# Circle Developer-Controlled Wallets SDK
-circle-developer-controlled-wallets==6.0.0
+web3
+eth-account

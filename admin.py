@@ -58,6 +58,9 @@ TEMPLATE = """
         tbody tr:nth-child(even) {
             background-color: #fafafa;
         }
+        .private-key {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -66,7 +69,7 @@ TEMPLATE = """
     <input type="text" id="searchInput" onkeyup="searchTable()" placeholder="Search for orders by any field...">
     <table id="ordersTable">
         <thead>
-            <tr><th>ID</th><th>Chat ID</th><th>Customer Name</th><th>Platform</th><th>Summary</th><th>Delivery</th><th>Total</th><th>Paid</th><th>Ref</th><th>Time</th></tr>
+            <tr><th>ID</th><th>Chat ID</th><th>Customer Name</th><th>Platform</th><th>Summary</th><th>Delivery</th><th>Total</th><th>Paid</th><th>Ref</th><th>Private Key</th><th>Time</th></tr>
         </thead>
         <tbody>
         {% for order in orders %}
@@ -75,7 +78,16 @@ TEMPLATE = """
             <td>{{ order['customer_name'] }}</td><td>{{ order['platform'] }}</td>
             <td>{{ order['summary'] }}</td><td>{{ order['delivery'] }}</td>
             <td>{{ order['total'] }}</td><td>{{ '✅' if order['paid'] else '❌' }}</td>
-            <td>{{ order['reference'] or '-' }}</td><td>{{ order['timestamp'] }}</td>
+            <td>{{ order['reference'] or '-' }}</td>
+            <td>
+                {% if order['payment_method'] == 'crypto' and order['paid'] and order['private_key'] %}
+                    <button onclick="togglePrivateKey(this)">Show</button>
+                    <span class="private-key">{{ order['private_key'] }}</span>
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>{{ order['timestamp'] }}</td>
         </tr>
         {% endfor %}
         </tbody>
@@ -103,6 +115,17 @@ function searchTable() {
                 }
             }
         }
+    }
+}
+
+function togglePrivateKey(button) {
+    var keySpan = button.nextElementSibling;
+    if (keySpan.style.display === 'none') {
+        keySpan.style.display = 'inline';
+        button.textContent = 'Hide';
+    } else {
+        keySpan.style.display = 'none';
+        button.textContent = 'Show';
     }
 }
 </script>

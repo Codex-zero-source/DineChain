@@ -32,6 +32,7 @@ async def init_db():
                     reference TEXT,
                     payment_method TEXT,
                     deposit_address TEXT,
+                    private_key TEXT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
             """)
@@ -48,16 +49,8 @@ async def init_db():
                 );
             """)
 
-            await cursor.execute("""
-                CREATE TABLE IF NOT EXISTS circle_wallets (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT NOT NULL UNIQUE,
-                    wallet_id TEXT NOT NULL UNIQUE,
-                    chat_id TEXT NOT NULL,
-                    platform TEXT NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
+            # Drop the obsolete circle_wallets table if it exists
+            await cursor.execute("DROP TABLE IF EXISTS circle_wallets")
         
             await conn.commit()
     print("✅ Database initialized successfully.")

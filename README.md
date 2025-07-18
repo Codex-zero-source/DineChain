@@ -69,7 +69,15 @@ cd JollofAI
     flask run
     ```
 
-3.  **Set up webhooks:**
+3.  **Run the Payment Watcher (in a separate terminal):**
+
+    The payment watcher is a separate service that monitors the blockchain for incoming crypto payments.
+
+    ```bash
+    python payment_watcher.py
+    ```
+
+4.  **Set up webhooks:**
 
     -   **Telegram:** You'll need to set up a webhook to point to your server's `/webhook` endpoint. You can use a tool like `ngrok` for local development.
 
@@ -79,22 +87,22 @@ cd JollofAI
 
     -   **Twilio (WhatsApp):** Configure the webhook URL in your Twilio dashboard to point to `/twilio_webhook`.
 
-## 🪙 Crypto Payments (USDC via Circle)
+## 🪙 Crypto Payments (USDT on Fuji Testnet)
 
 Set the following environment variables (see `env.example`):
 
 | Variable | Description |
 |----------|-------------|
-| `CIRCLE_API_KEY` | Circle sandbox / prod API key |
-| `CIRCLE_API_URL` | `https://api-sandbox.circle.com` for testing |
-| `CIRCLE_ADMIN_WALLET` | Wallet ID that ultimately receives funds |
+| `FUJI_RPC_URL` | The RPC URL for the Fuji testnet. |
+| `USDT_TOKEN_ADDRESS` | The contract address for the USDT token on the Fuji testnet. |
 
 Flow:
 1. After order confirmation bot asks **Card / Crypto**.
-2. If **Crypto** selected it creates a Circle customer wallet and deposit address, replies with USDC amount & address (Polygon).
-3. When Circle webhook `AddressDeposits` reports `CONFIRMED`, order is marked paid, user & kitchen notified.
+2. If **Crypto** selected it generates a new wallet and replies with the USDT amount & address (Fuji Testnet).
+3. The system then waits for the payment to be confirmed on the blockchain.
+4. A webhook at `/payment_webhook` is used to verify the payment. Once verified, the order is marked as paid, and the user and kitchen are notified.
 
-> For production switch `CIRCLE_API_URL` to Circle mainnet endpoint and update your webhook URL in Circle console to `https://your-domain/circle/webhook`.
+> For production, you would switch to a mainnet RPC URL and a USDT token address on that mainnet. You would also need to update your webhook URL to a production URL.
 
 ## Project Structure
 
@@ -104,9 +112,11 @@ Flow:
 ├── admin.py         # Admin routes and logic
 ├── orders.py        # Database schema and order management
 ├── stripe.py        # Stripe integration logic
+├── crypto_payment.py # Crypto payment logic
+├── payment_watcher.py # Service to monitor crypto payments
 ├── set_webhook.py   # Script to set the Telegram webhook
 ├── requirements.txt # Python dependencies
-├── .env             # Example environment variables
+├── .env.example     # Example environment variables
 └── README.md
 ```
 
