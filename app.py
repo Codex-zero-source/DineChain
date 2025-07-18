@@ -8,7 +8,7 @@ from flask import Flask, request
 from dotenv import load_dotenv
 from twilio.twiml.messaging_response import MessagingResponse
 from stripe_utils import create_stripe_checkout_session
-from crypto_payment import generate_wallet, get_usdc_balance
+from crypto_payment import generate_wallet
 from set_webhook import set_webhook
 from admin import admin_bp
 from orders import get_db_conn, init_db
@@ -404,6 +404,46 @@ async def internal_order_paid_webhook(order_id):
     else:
         return "Order not found", 404
 
+async def check_usdc_payment(session, address, expected_amount):
+    """Checks for a USDC payment by querying the Snowtrace API."""
+    SNOWTRACE_API_KEY = os.getenv("SNOWTRACE_API_KEY")
+    USDC_TOKEN_ADDRESS = os.getenv("USDC_TOKEN_ADDRESS")
+    
+    if not SNOWTRACE_API_KEY:
+        print("⚠️ SNOWTRACE_API_KEY is not set. Cannot check for crypto payments.")
+        return False
+
+    url = (
+        "https://api-testnet.snowtrace.io/api"
+        "?module=account"
+        "&action=tokentx"
+        f"&contractaddress={USDC_TOKEN_ADDRESS}"
+        f"&address={address}"
+        "&page=1&offset=100&sort=desc"
+        f"&apikey={SNOWTRACE_API_KEY}"
+    )
+    
+    try:
+        response = await session.get(url, timeout=30.0)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data["status"] == "1" and data["result"]:
+            for tx in data["result"]:
+                # Check for incoming transactions
+                if tx["to"].lower() == address.lower():
+                    # The value is given in the smallest unit (wei), so we divide by 10^6 for USDC
+                    value_received = int(tx["value"]) / 1_000_000
+                    if value_received >= expected_amount:
+                        return True
+        return False
+    except httpx.HTTPStatusError as e:
+        print(f"❌ HTTP error checking payment for {address}: {e.response.status_code}")
+        return False
+    except (KeyError, IndexError, json.JSONDecodeError) as e:
+        print(f"❌ Error parsing Snowtrace API response for {address}: {e}")
+        return False
+
 def payment_watcher_thread():
     """A background thread that periodically checks for crypto payments."""
     print("🤖 Starting payment watcher thread...")
@@ -415,38 +455,38 @@ def payment_watcher_thread():
     async def check_payments():
         while True:
             try:
-                async with get_db_conn() as conn:
-                    cursor = await conn.cursor()
-                    await cursor.execute(
-                        "SELECT id, deposit_address, total FROM orders WHERE paid = 0 AND payment_method = 'crypto' AND deposit_address IS NOT NULL"
-                    )
-                    unpaid_orders = await cursor.fetchall()
-                    unpaid_orders_list = list(unpaid_orders)
+                async with httpx.AsyncClient() as session:
+                    async with get_db_conn() as conn:
+                        cursor = await conn.cursor()
+                        await cursor.execute(
+                            "SELECT id, deposit_address, total FROM orders WHERE paid = 0 AND payment_method = 'crypto' AND deposit_address IS NOT NULL"
+                        )
+                        unpaid_orders = await cursor.fetchall()
+                        unpaid_orders_list = list(unpaid_orders)
 
-                if unpaid_orders_list:
-                    print(f"🔎 Found {len(unpaid_orders_list)} unpaid crypto order(s). Checking balances...")
-                    for order in unpaid_orders_list:
-                        order_id = order['id']
-                        address = order['deposit_address']
-                        amount_expected = order['total'] / 100
+                    if unpaid_orders_list:
+                        print(f"🔎 Found {len(unpaid_orders_list)} unpaid crypto order(s). Checking payments...")
+                        for order in unpaid_orders_list:
+                            order_id = order['id']
+                            address = order['deposit_address']
+                            amount_expected = order['total'] / 100
 
-                        try:
-                            balance = get_usdc_balance(address)
-                            if balance >= amount_expected:
-                                print(f"💰 Payment detected for order {order_id}!")
-                                async with get_db_conn() as conn_update:
-                                    cursor_update = await conn_update.cursor()
-                                    await cursor_update.execute("UPDATE orders SET paid = 1 WHERE id = ?", (order_id,))
-                                    await conn_update.commit()
-                                
-                                # Notify the main app
-                                headers = {"Authorization": f"Bearer {INTERNAL_API_KEY}"}
-                                url = f"{os.getenv('APP_URL')}/internal/order_paid/{order_id}"
-                                async with httpx.AsyncClient() as client:
-                                    await client.post(url, headers=headers)
+                            try:
+                                paid = await check_usdc_payment(session, address, amount_expected)
+                                if paid:
+                                    print(f"💰 Payment detected for order {order_id}!")
+                                    async with get_db_conn() as conn_update:
+                                        cursor_update = await conn_update.cursor()
+                                        await cursor_update.execute("UPDATE orders SET paid = 1 WHERE id = ?", (order_id,))
+                                        await conn_update.commit()
+                                    
+                                    # Notify the main app
+                                    headers = {"Authorization": f"Bearer {INTERNAL_API_KEY}"}
+                                    url = f"{os.getenv('APP_URL')}/internal/order_paid/{order_id}"
+                                    await session.post(url, headers=headers)
 
-                        except Exception as e:
-                            print(f"⚠️ Error checking balance for order {order_id}: {e}")
+                            except Exception as e:
+                                print(f"⚠️ Error checking payment for order {order_id}: {e}")
             except Exception as e:
                 print(f"🚨 An unexpected error occurred in the payment watcher: {e}")
             
