@@ -14,7 +14,7 @@ from admin import admin_bp
 from orders import get_db_conn, init_db
 from llm import get_llm_response
 import asyncio
-from stripe.error import SignatureVerificationError
+from stripe import SignatureVerificationError
 import threading
 import time
 
@@ -409,7 +409,7 @@ async def check_usdc_payment(session, address, expected_amount):
     USDC_TOKEN_ADDRESS = os.getenv("USDC_TOKEN_ADDRESS")
     
     url = (
-        "https://api-testnet.snowtrace.io/api"
+        "https://subnets-test.avax.network/c-chain/api"
         "?module=account"
         "&action=tokentx"
         f"&contractaddress={USDC_TOKEN_ADDRESS}"
