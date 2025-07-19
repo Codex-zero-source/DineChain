@@ -16,7 +16,7 @@ async def get_llm_response(history):
         "Authorization": f"Bearer {IOINTELLIGENCE_API_KEY}"
     }
     data = {
-        "model": "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
+        "model": "meta-llama/Llama-3.2-90B-Vision-Instruct",
         "messages": [{"role": msg["role"], "content": msg["content"]} for msg in history],
         "temperature": 0.7,
         "max_tokens": 400
