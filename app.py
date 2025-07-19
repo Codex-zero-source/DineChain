@@ -418,18 +418,21 @@ async def check_usdc_payment(session, address, expected_amount):
     )
     
     try:
-        response = await session.get(url, timeout=30.0)
-        response.raise_for_status()
-        data = response.json()
-        
-        if data["status"] == "1" and data["result"]:
-            for tx in data["result"]:
-                # Check for incoming transactions
-                if tx["to"].lower() == address.lower():
-                    # The value is given in the smallest unit (wei), so we divide by 10^6 for USDC
-                    value_received = int(tx["value"]) / 1_000_000
-                    if value_received >= expected_amount:
-                        return True
+        resp = await session.get(url, timeout=30.0)
+        resp.raise_for_status()
+        data = resp.json()
+
+        if data.get("status") != "1" or "result" not in data:
+            return False
+
+        # Loop through recent transactions to find incoming USDC
+        for tx in data["result"]:
+            if tx["to"].lower() == address.lower():
+                # Convert from token's smallest unit (USDC has 6 decimals)
+                amount = int(tx["value"]) / 10**6
+                print(f"Found USDC payment: {amount} USDC")
+                if amount >= expected_amount:
+                    return True
         return False
     except httpx.HTTPStatusError as e:
         print(f"❌ HTTP error checking payment for {address}: {e.response.status_code}")
