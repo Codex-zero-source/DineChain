@@ -14,7 +14,7 @@ from admin import admin_bp
 from orders import get_db_conn, init_db
 from llm import get_llm_response
 import asyncio
-from stripe.error import SignatureVerificationError
+from stripe import SignatureVerificationError
 import threading
 import time
 
@@ -32,7 +32,7 @@ asyncio.run(init_db())
 # 🔐 Environment
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 IOINTELLIGENCE_API_KEY = os.getenv("LLM_API_KEY")
-LLM_BASE_URL = "https://api.intelligence.io.solutions/api/v1"
+LLM_BASE_URL = os.getenv("LLM_BASE_URL")
 KITCHEN_CHAT_ID = os.getenv("KITCHEN_CHAT_ID")
 TELEGRAM_BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
@@ -409,7 +409,7 @@ async def check_usdc_payment(session, address, expected_amount):
     USDC_TOKEN_ADDRESS = os.getenv("USDC_TOKEN_ADDRESS")
     
     url = (
-        "https://api-testnet.snowtrace.io/api"
+        "https://subnets-test.avax.network/c-chain/api"
         "?module=account"
         "&action=tokentx"
         f"&contractaddress={USDC_TOKEN_ADDRESS}"
