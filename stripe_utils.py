@@ -18,7 +18,7 @@ async def create_stripe_checkout_session(order_id, email, order_items, chat_id, 
                 'product_data': {
                     'name': item.get('name', 'Unnamed Item'),
                 },
-                'unit_amount': int(item.get('price', 0) * 100),
+                'unit_amount': int(item.get('price', 0)),
             },
             'quantity': item.get('quantity', 1),
         })
