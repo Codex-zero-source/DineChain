@@ -22,6 +22,9 @@ load_dotenv()
 app = Flask(__name__)
 app.register_blueprint(admin_bp)
 
+# A dictionary to hold a lock for each conversation to prevent race conditions
+conversation_locks = {}
+
 # Initialize the database asynchronously before starting the app
 asyncio.run(init_db())
 
@@ -304,38 +307,44 @@ async def twilio_webhook():
     return str(response)
 
 async def process_message(platform, chat_id, user_text, customer_name):
-    async with get_db_conn() as conn:
-        # 1️⃣ Check: Is there a pending unpaid order?
-        unpaid = await conn.execute(
-            "SELECT 1 FROM orders WHERE chat_id = ? AND platform = ? AND paid = 0 ORDER BY timestamp DESC LIMIT 1",
-            (chat_id, platform)
-        )
-        if await unpaid.fetchone():
-            # If user text indicates payment choice, dispatch to handler
-            if user_text.lower() in ("card", "crypto"):
-                await _handle_payment_choice(conn, platform, chat_id, user_text)
-                return
-            # Otherwise, prompt them to choose
-            await send_user_message(platform, chat_id,
-                "You have an unpaid order. Please reply 'Card' to pay by card or 'Crypto' to pay with USDC."
+    # Get or create a lock for this conversation
+    if chat_id not in conversation_locks:
+        conversation_locks[chat_id] = asyncio.Lock()
+    lock = conversation_locks[chat_id]
+
+    async with lock:
+        async with get_db_conn() as conn:
+            # 1️⃣ Check: Is there a pending unpaid order?
+            unpaid = await conn.execute(
+                "SELECT 1 FROM orders WHERE chat_id = ? AND platform = ? AND paid = 0 ORDER BY timestamp DESC LIMIT 1",
+                (chat_id, platform)
             )
-            return
+            if await unpaid.fetchone():
+                # If user text indicates payment choice, dispatch to handler
+                if user_text.lower() in ("card", "crypto"):
+                    await _handle_payment_choice(conn, platform, chat_id, user_text)
+                    return
+                # Otherwise, prompt them to choose
+                await send_user_message(platform, chat_id,
+                    "You have an unpaid order. Please reply 'Card' to pay by card or 'Crypto' to pay with USDC."
+                )
+                return
 
-        # 2️⃣ No unpaid order? Continue to normal LLM flow…
-        history = await get_conversation_history(conn, platform, chat_id)
-        if not history:
-            history = get_initial_history()
+            # 2️⃣ No unpaid order? Continue to normal LLM flow…
+            history = await get_conversation_history(conn, platform, chat_id)
+            if not history:
+                history = get_initial_history()
 
-        history.append({"role": "user", "content": user_text})
+            history.append({"role": "user", "content": user_text})
 
-        assistant_reply = await process_llm_response(platform, chat_id, history)
-        if not assistant_reply:
-            return
+            assistant_reply = await process_llm_response(platform, chat_id, history)
+            if not assistant_reply:
+                return
 
-        history.append({"role": "assistant", "content": assistant_reply})
-        await update_conversation_history(conn, platform, chat_id, history)
+            history.append({"role": "assistant", "content": assistant_reply})
+            await update_conversation_history(conn, platform, chat_id, history)
 
-        await handle_order_creation(conn, platform, chat_id, customer_name, assistant_reply)
+            await handle_order_creation(conn, platform, chat_id, customer_name, assistant_reply)
 
     return "ok", 200
 
@@ -409,7 +418,7 @@ async def check_usdc_payment(session, address, expected_amount):
     USDC_TOKEN_ADDRESS = os.getenv("USDC_TOKEN_ADDRESS")
     
     url = (
-        "https://subnets-test.avax.network/c-chain/api"
+        "https://api-testnet.snowtrace.io/api"
         "?module=account"
         "&action=tokentx"
         f"&contractaddress={USDC_TOKEN_ADDRESS}"
