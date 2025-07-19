@@ -406,13 +406,8 @@ async def internal_order_paid_webhook(order_id):
 
 async def check_usdc_payment(session, address, expected_amount):
     """Checks for a USDC payment by querying the Snowtrace API."""
-    SNOWTRACE_API_KEY = os.getenv("SNOWTRACE_API_KEY")
     USDC_TOKEN_ADDRESS = os.getenv("USDC_TOKEN_ADDRESS")
     
-    if not SNOWTRACE_API_KEY:
-        print("⚠️ SNOWTRACE_API_KEY is not set. Cannot check for crypto payments.")
-        return False
-
     url = (
         "https://api-testnet.snowtrace.io/api"
         "?module=account"
@@ -420,7 +415,6 @@ async def check_usdc_payment(session, address, expected_amount):
         f"&contractaddress={USDC_TOKEN_ADDRESS}"
         f"&address={address}"
         "&page=1&offset=100&sort=desc"
-        f"&apikey={SNOWTRACE_API_KEY}"
     )
     
     try:
