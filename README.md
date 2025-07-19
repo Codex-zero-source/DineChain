@@ -1,32 +1,50 @@
-# JollofAI
+# DineChain API
 
-JollofAI is an AI-powered WhatsApp and Telegram bot that helps customers of a restaurant to place orders for food and drinks.
+DineChain is an AI-powered chatbot designed to streamline the food ordering process for restaurants. It allows users to place orders, make payments via card or cryptocurrency, and receive real-time updates through a conversational interface on platforms like Telegram and WhatsApp.
 
 ## Features
 
-- **Conversational Ordering:** Customers can place orders in a natural, conversational way.
-- **Stripe Integration:** Securely process payments using Stripe.
-- **Telegram & WhatsApp Integration:** Works with both Telegram and WhatsApp.
-- **Order Notifications:** Instantly notifies the kitchen of new orders.
+-   **Conversational Ordering**: A natural language interface for placing food and drink orders.
+-   **Multi-Platform Support**: Works with both Telegram and WhatsApp.
+-   **Dual Payment Options**: Supports payments via Stripe (credit/debit cards) and cryptocurrency (USDC on the Fuji testnet).
+-   **Real-Time Notifications**: Keeps the user and kitchen updated on the order status.
+-   **Admin Dashboard**: A simple web interface to view all orders.
 
-## Getting Started
+## Project Structure
 
-### Prerequisites
+The project is organized into the following structure:
 
-- Python 3.10+
-- `pip` for package management
-- A Stripe account
-- A Telegram bot token
-- Twilio account for WhatsApp
+```
+.
+├── dinechain_api
+│   ├── __init__.py
+│   ├── app.py
+│   ├── blueprints
+│   │   ├── __init__.py
+│   │   ├── admin.py
+│   │   └── orders.py
+│   ├── services
+│   │   ├── __init__.py
+│   │   ├── crypto_payment.py
+│   │   └── llm.py
+│   └── utils
+│       ├── __init__.py
+│       ├── set_webhook.py
+│       └── stripe_utils.py
+├── main.py
+├── requirements.txt
+├── .env.example
+└── README.md
+```
 
-### Installation
+## Setup and Installation
 
 1.  **Clone the repository:**
 
-```bash
-git clone https://github.com/Codex-zero-source/JollofAI
-cd JollofAI
-```
+    ```bash
+    git clone https://github.com/Codex-zero-source/JollofAI.git
+    cd JollofAI
+    ```
 
 2.  **Create and activate a virtual environment:**
 
@@ -35,84 +53,48 @@ cd JollofAI
     source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
     ```
 
-3.  **Install dependencies:**
+3.  **Install the dependencies:**
 
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Set up environment variables:**
+4.  **Set up your environment variables:**
 
-    Create a `.env` file in the root directory and add the following:
+    Create a `.env` file in the root directory and copy the contents of `.env.example`. Fill in the required API keys and tokens.
 
-    ```env
-    TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
-    LLM_API_KEY="your_llm_api_key"
-    BASE_URL="your_llm_base_url"
-    KITCHEN_CHAT_ID="your_kitchen_chat_id"
-    STRIPE_SECRET_KEY="your_stripe_secret_key"
-    STRIPE_WEBHOOK_SECRET="your_stripe_webhook_secret"
-    TWILIO_ACCOUNT_SID="your_twilio_account_sid"
-    TWILIO_AUTH_TOKEN="your_twilio_auth_token"
-    TWILIO_WHATSAPP_NUMBER="your_twilio_whatsapp_number"
-    ```
-
-### Running the App
-
-1.  **Initialize the database:**
-
-    The database is initialized automatically when the app starts.
-
-2.  **Run the Flask app:**
-
-    The application now includes the payment watcher, which runs automatically in a background thread.
+5.  **Run the application:**
 
     ```bash
-    flask run
+    python main.py
     ```
 
-3.  **Set up webhooks:**
+## How It Works
 
-    -   **Telegram:** You'll need to set up a webhook to point to your server's `/webhook` endpoint. You can use a tool like `ngrok` for local development.
+The application's core is a **Flask** web server that processes incoming messages and manages the order lifecycle. Here’s a step-by-step breakdown of the process:
 
-        ```bash
-        curl -F "url=https://your-domain.com/webhook" https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook
-        ```
+1.  **Webhook Listeners**: The application exposes webhook endpoints (`/webhook` for Telegram and `/twilio_webhook` for WhatsApp) to receive incoming user messages.
 
-    -   **Twilio (WhatsApp):** Configure the webhook URL in your Twilio dashboard to point to `/twilio_webhook`.
+2.  **Message Processing**: The `process_message` function is the central hub for handling user input. It uses a locking mechanism to ensure that messages from the same user are processed sequentially, preventing race conditions.
 
-## 🪙 Crypto Payments (USDT on Fuji Testnet)
+3.  **Conversational AI**:
+    *   The user's conversation history is passed to a Large Language Model (LLM).
+    *   The LLM interprets the user's intent, guides them through menu selection, and confirms order details.
 
-Set the following environment variables (see `env.example`):
+4.  **Order Creation**:
+    *   Once the user confirms their order, the LLM generates a JSON summary.
+    *   This summary is parsed, and a new order is created in the database with an "unpaid" status.
+    -   The user is then prompted to choose a payment method: Card or Crypto.
 
-| Variable | Description |
-|----------|-------------|
-| `FUJI_RPC_URL` | The RPC URL for the Fuji testnet. |
-| `USDT_TOKEN_ADDRESS` | The contract address for the USDT token on the Fuji testnet. |
+5.  **Payment Flows**:
+    *   **Card (Stripe)**: If the user selects "Card," a Stripe Checkout session is created, and a payment link is sent to the user. A dedicated `/stripe-webhook` endpoint listens for payment confirmation from Stripe.
+    *   **Crypto (USDC)**: If the user selects "Crypto," a new wallet on the Fuji testnet is generated, and the user is asked to send the required amount of USDC to that address.
 
-Flow:
-1. After order confirmation bot asks **Card / Crypto**.
-2. If **Crypto** selected it generates a new wallet and replies with the USDT amount & address (Fuji Testnet).
-3. The system then waits for the payment to be confirmed on the blockchain.
-4. A webhook at `/payment_webhook` is used to verify the payment. Once verified, the order is marked as paid, and the user and kitchen are notified.
+6.  **Payment Verification**:
+    *   A background thread (`payment_watcher_thread`) runs continuously to monitor crypto payments.
+    *   It periodically queries the Snowtrace API to check for incoming transactions to the generated deposit addresses.
+    *   When a valid crypto payment is detected or a Stripe payment is confirmed, the order's status in the database is updated to "paid."
 
-> For production, you would switch to a mainnet RPC URL and a USDT token address on that mainnet. You would also need to update your webhook URL to a production URL.
+7.  **Final Confirmation**: Once an order is marked as paid, the `_notify_user_and_kitchen` function is triggered, sending a final confirmation receipt to the customer and a notification to the kitchen.
 
-## Project Structure
-
-```
-.
-├── app.py           # Main Flask application with integrated payment watcher
-├── admin.py         # Admin routes and logic
-├── orders.py        # Database schema and order management
-├── stripe.py        # Stripe integration logic
-├── crypto_payment.py # Crypto payment logic
-├── set_webhook.py   # Script to set the Telegram webhook
-├── requirements.txt # Python dependencies
-├── .env.example     # Example environment variables
-└── README.md
-```
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request.
+8.  **Admin Dashboard**: A simple web interface at the `/admin` route allows for viewing all orders and their current status.
