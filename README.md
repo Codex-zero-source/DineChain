@@ -1,4 +1,4 @@
-# DineChain API
+# DineChain
 
 DineChain is an AI-powered chatbot designed to streamline the food ordering process for restaurants. It allows users to place orders, make payments via card or cryptocurrency, and receive real-time updates through a conversational interface on platforms like Telegram and WhatsApp.
 
